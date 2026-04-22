@@ -134,7 +134,7 @@ function bHTML(eq,cl,loc,per,pv,fr,venc,date){
   if(eq.retractedHeight)dims+='<tr><td class="tl">Altura da plataforma recolhida (metros)</td><td>'+eq.retractedHeight+'</td></tr>';
   if(eq.length)dims+='<tr><td class="tl">Comprimento da plataforma (metros)</td><td>'+eq.length+'</td></tr>';
   if(eq.width)dims+='<tr><td class="tl">Largura da plataforma (metros)</td><td>'+eq.width+'</td></tr>';
-  var css='@page{size:A4;margin:0}*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#222;line-height:1.6;background:#fff}.page{width:210mm;min-height:297mm;padding:25mm 25mm 35mm;margin:0 auto;position:relative;page-break-after:always}.page:last-child{page-break-after:auto}.hdr{text-align:center;margin-bottom:15px}.hdr img{height:80px}.ftr{position:absolute;bottom:15mm;left:25mm;right:25mm;text-align:center;font-size:10px;font-weight:700;color:#333;border-top:1px solid #ccc;padding-top:6px}.date{text-align:right;font-size:13px;margin:5px 0 25px}h1{text-align:center;font-size:22px;font-weight:700;font-style:italic;margin:15px 0 20px}p{text-align:justify;margin-bottom:10px}table{width:100%;border-collapse:collapse;margin:15px 0;table-layout:fixed}td,th{border:1px solid #999;padding:6px 8px;font-size:11px;word-wrap:break-word;overflow-wrap:break-word}th{background:#f0f0f0;font-weight:700;text-align:center;font-size:10px}td{text-align:center}td.tl{text-align:left}.tbl-s{table-layout:auto}.tbl-s td,.tbl-s th{font-size:12px;padding:8px 12px}.st{font-weight:700;font-size:14px;margin:22px 0 8px;padding-left:2px}.st2{font-weight:700;font-size:13px;margin:18px 0 8px}ul{margin:5px 0 12px 25px}li{margin-bottom:5px;line-height:1.55;font-size:12.5px}.sig{border-top:1.5px solid #333;width:55%;margin:50px 0 8px}.note{font-size:11.5px;margin-top:25px;line-height:1.5}.eq-ph{text-align:center;margin:15px 0}.eq-ph img{max-height:200px;max-width:100%}@media print{@page{size:A4;margin:10mm 15mm}body{background:#fff}.page{width:100%!important;min-height:auto!important;padding:0!important;margin:0!important;box-shadow:none!important;border:none!important;page-break-after:always;page-break-inside:avoid}.page:last-child{page-break-after:auto}.ftr{position:relative!important;bottom:auto!important;left:auto!important;right:auto!important;margin-top:15px}ul{page-break-inside:avoid}table{page-break-inside:avoid}.eq-ph img{max-height:180px!important}}@media screen{.page{box-shadow:0 2px 20px rgba(0,0,0,0.12);margin:15px auto;border:1px solid #e0e0e0}}';
+  var css='@page{size:A4;margin:0}*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#222;line-height:1.6;background:#fff}.page{width:210mm;min-height:297mm;padding:15mm 20mm 20mm;margin:0 auto;position:relative;page-break-after:always}.page:last-child{page-break-after:auto}.hdr{text-align:center;margin-bottom:8px}.hdr img{height:60px}.ftr{position:absolute;bottom:10mm;left:20mm;right:20mm;text-align:center;font-size:10px;font-weight:700;color:#333;border-top:1px solid #ccc;padding-top:6px}.date{text-align:right;font-size:13px;margin:5px 0 15px}h1{text-align:center;font-size:20px;font-weight:700;font-style:italic;margin:10px 0 12px}p{text-align:justify;margin-bottom:6px}table{width:100%;border-collapse:collapse;margin:15px 0;table-layout:fixed}td,th{border:1px solid #999;padding:6px 8px;font-size:11px;word-wrap:break-word;overflow-wrap:break-word}th{background:#f0f0f0;font-weight:700;text-align:center;font-size:10px}td{text-align:center}td.tl{text-align:left}.tbl-s{table-layout:auto}.tbl-s td,.tbl-s th{font-size:12px;padding:8px 12px}.st{font-weight:700;font-size:14px;margin:12px 0 5px;padding-left:2px}.st2{font-weight:700;font-size:13px;margin:10px 0 5px}ul{margin:3px 0 8px 20px}li{margin-bottom:3px;line-height:1.4;font-size:11.5px}.sig{border-top:1.5px solid #333;width:55%;margin:30px 0 5px}.note{font-size:11.5px;margin-top:25px;line-height:1.5}.eq-ph{text-align:center;margin:15px 0}.eq-ph img{max-height:170px;max-width:90%}@media print{@page{size:A4;margin:10mm 15mm}body{background:#fff}.page{width:100%!important;min-height:auto!important;padding:0!important;margin:0!important;box-shadow:none!important;border:none!important;page-break-after:always;page-break-inside:avoid}.page:last-child{page-break-after:auto}.ftr{position:relative!important;bottom:auto!important;left:auto!important;right:auto!important;margin-top:15px}ul{page-break-inside:avoid}table{page-break-inside:avoid}.eq-ph img{max-height:180px!important}}@media screen{.page{box-shadow:0 2px 20px rgba(0,0,0,0.12);margin:15px auto;border:1px solid #e0e0e0}}';
   var hdr='<div class="hdr"><img src="'+LOGO+'"/></div>';
   var ftr='<div class="ftr">'+CO.name+'<br>'+CO.addr+'</div>';
   // PAGE 1
@@ -151,9 +151,9 @@ function bHTML(eq,cl,loc,per,pv,fr,venc,date){
   var p2='<div class="page">'+hdr;
   p2+='<div class="st">Disponibilidade:</div>';
   p2+='<p>Imediata, mediante consulta previa.</p>';
-  p2+='<div class="st" style="margin-top:20px">Local de Operação do Equipamento</div>';
+  p2+='<div class="st" >Local de Operação do Equipamento</div>';
   p2+='<ul><li>'+loc+'</li></ul>';
-  p2+='<div class="st" style="margin-top:20px">Responsabilidades da LOCADORA</div>';
+  p2+='<div class="st" >Responsabilidades da LOCADORA</div>';
   p2+='<ul>';
   p2+='<li>Fazer Check-in e Check-out do equipamento.</li>';
   p2+='<li>Disponibilizar manual de operação na porta manual do equipamento.</li>';
@@ -162,7 +162,7 @@ function bHTML(eq,cl,loc,per,pv,fr,venc,date){
   p2+='<li>Fornecer o equipamento dentro das normas do Fabricante.</li>';
   p2+='<li>Enviar um técnico no local da contratada no prazo máximo de 48 horas após solicitação de manutenção corretiva, considerando horário comercial em dias úteis das 8 às 17 horas incluindo finais de semana e atendimento telefônico 24 horas.</li>';
   p2+='</ul>';
-  p2+='<div class="st" style="margin-top:20px">Responsabilidades da LOCATÁRIA</div>';
+  p2+='<div class="st" >Responsabilidades da LOCATÁRIA</div>';
   p2+='<ul>';
   p2+='<li>Responsabilidade pela operação do equipamento, garantindo serem os operadores habilitados e capacitados para exercerem sua função.</li>';
   p2+='<li>Responsabilidade por quaisquer danos causados ao equipamento, extravio, furto, roubo, ou a terceiros, pela má utilização da máquina ou por imperícia dos operadores, inclusive com o ressarcimento de todos os prejuízos. Segue alguns exemplos de má utilização:<br>Arranhões em superficies polidas ou pintadas ou qualquer espécie de dano ou avaria, o Sobrecarga na capacidade normal de operação do equipamento; o Danos causados a pneus ou câmaras de ar, como cortes e estouros; o Utilização de combustíveis de má qualidade ou contaminado;</li>';
@@ -181,7 +181,7 @@ function bHTML(eq,cl,loc,per,pv,fr,venc,date){
   var p3='<div class="page">'+hdr;
   p3+='<div class="st">Valores</div>';
   p3+='<table>';
-  p3+='<tr><th style="width:22%">EQUIPAMENTO</th><th style="width:15%">MARCA<br>MODELO</th><th style="width:10%">ALTURA MAX DE TRABALHO</th><th style="width:12%">PERÍODO DE LOCAÇÃO</th><th style="width:8%">QUANTIDADE DE EQUIPAMENTOS</th><th style="width:16%">VALOR DOS EQUIPAMENTOS MES</th><th style="width:17%">VALOR TOTAL DO CONTRATO PARA '+pd+' DIAS</th></tr>';
+  p3+='<tr><th style="width:22%">EQUIPAMENTO</th><th style="width:15%">MARCA<br>MODELO</th><th style="width:10%">ALTURA MAX DE TRABALHO</th><th style="width:12%">PERÍODO DE LOCAÇÃO</th><th style="width:8%">QTD</th><th style="width:16%">VALOR UNIT.<br>MÊS</th><th style="width:17%">VALOR TOTAL<br>'+pd+' DIAS</th></tr>';
   p3+='<tr><td>1-'+es+'</td><td>'+eq.brand.toUpperCase()+'<br>'+eq.model+'</td><td>'+eq.height+' m</td><td>'+pd+' DIAS</td><td>1</td><td>'+fv(pv)+'</td><td>'+fv(pv)+'</td></tr>';
   p3+='</table>';
   p3+='<div class="st2">Frete</div>';
@@ -203,7 +203,7 @@ function bHTML(eq,cl,loc,per,pv,fr,venc,date){
   p3+='</ul>';
   p3+='<div class="st2">Tributação</div>';
   p3+='<p>Optante pelo Simples Nacional.</p>';
-  p3+='<p style="margin-top:35px">Concordo e autorizo a Locação proposta acima,</p>';
+  p3+='<p style="margin-top:20px">Concordo e autorizo a Locação proposta acima,</p>';
   p3+='<div class="sig"></div>';
   p3+='<p>Empresa: <b>'+cl.name+'</b></p>';
   p3+='<p>CNPJ: '+(cl.document||"_______________")+'</p>';
