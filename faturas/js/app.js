@@ -127,7 +127,8 @@
   }
 
   async function carregar() {
-    const [cfg, emi, donos, cli, locs, fats, ops] = await Promise.all(["fat_config", "fat_emissores", "fat_donos", "fat_clientes", "fat_locacoes", "fat_faturas", "fat_operadores"].map(todos));
+    const [cfg, emi, donos, cli, locs, fats, ops, conv] = await Promise.all(["fat_config", "fat_emissores", "fat_donos", "fat_clientes", "fat_locacoes", "fat_faturas", "fat_operadores", "fat_convites"].map(todos));
+    S.convites = conv;
     S.cfg = Object.assign({ proximoRegistro: 1, digitosRegistro: 4, diasVencimento: 15, avisoDias: 3, textoOutrasInfo: "", comissao: { nome: "Rodolfo", pct: 5 } }, (cfg[0] || {}).dados || {});
     S.emissores = emi.sort((a, b) => a.ordem - b.ordem).map((e) => Object.assign({ id: e.id }, e.dados));
     S.donos = donos.sort((a, b) => a.ordem - b.ordem);
@@ -260,7 +261,7 @@
       let { data, error } = await sb.from("fat_operadores").select("*").eq("user_id", S.user.id);
       if (error) throw error;
       let op = data && data[0];
-      if (!op) {
+      if (!op || !op.ativo) { // sem cadastro ou aguardando: registra (entra liberado se houver convite para o e-mail)
         const meta = S.user.user_metadata || {};
         op = await rpc("fat_registrar_me", { p_nome: meta.nome || (S.user.email || "").split("@")[0] });
       }

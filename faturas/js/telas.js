@@ -251,7 +251,16 @@
                 ${o.ativo ? `<button class="btn peq" data-op="bloquear" data-u="${o.user_id}">Bloquear</button>` : `<button class="btn peq primario" data-op="liberar" data-u="${o.user_id}">Liberar</button>`}
                 ${o.ativo ? `<button class="btn peq fantasma" data-op="${o.admin ? "tirar-admin" : "admin"}" data-u="${o.user_id}">${o.admin ? "Tirar admin" : "Tornar admin"}</button>` : ""}
                 <button class="ic-btn peq" title="Remover" data-op="remover" data-u="${o.user_id}">${ic("lixo")}</button>` : o.user_id === S.user.id ? '<small class="muted">você</small>' : ""}</td></tr>`).join("")}</tbody></table></div>
-            <p class="muted" style="font-size:12.5px;margin:10px 0 0">Para incluir alguém: a pessoa abre o endereço do app, clica em <b>Primeiro acesso? Criar conta</b> e você libera aqui.</p></div>
+            ${admin ? `<div style="margin-top:14px;border-top:1px solid var(--borda);padding-top:14px;display:flex;flex-direction:column;gap:10px">
+              <b style="font-size:13.5px">Incluir operador</b>
+              <div class="linha-campos c2"><label class="campo"><span>Nome</span><input data-conv="nome"></label>
+                <label class="campo"><span>E-mail</span><input data-conv="email" type="email"></label></div>
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><label class="check"><input type="checkbox" data-conv="admin"> administrador</label>
+                <button class="btn primario peq" data-acao="convidar" style="margin-left:auto">${ic("mais")}Liberar acesso</button></div>
+              ${(S.convites || []).length ? `<div class="tabela-wrap"><table class="tab"><tbody>${S.convites.map((c) => `<tr><td><b>${esc(c.nome || "—")}</b><small class="muted" style="display:block">${esc(c.email)}</small></td>
+                <td><span class="etq">aguardando 1º acesso</span></td><td class="acoes-td"><button class="ic-btn peq" title="Remover convite" data-desconvidar="${esc(c.email)}">${ic("lixo")}</button></td></tr>`).join("")}</tbody></table></div>` : ""}
+              <p class="muted" style="font-size:12.5px;margin:0">Depois de liberar, envie o endereço do app para a pessoa. Ela clica em <b>Primeiro acesso? Criar conta</b> usando <b>este mesmo e-mail</b> e já entra liberada. Se ela já tiver conta no outro app da Metal Loc, é só clicar em <b>Entrar</b>.</p></div>`
+            : `<p class="muted" style="font-size:12.5px;margin:10px 0 0">Para incluir alguém, peça ao administrador.</p>`}</div>
           <div class="cartao"><div class="cartao-cab"><h2>Dados</h2></div>
             <div style="display:flex;flex-direction:column;gap:10px">
               <button class="btn" data-acao="backup">${ic("baixar")}Baixar cópia de segurança (JSON)</button>
@@ -266,8 +275,29 @@
     if (sel) sel.addEventListener("change", () => { emiAtual = sel.value; const e = S.emissores.find((x) => x.id === emiAtual) || {}; $$("[data-e]", main).forEach((i) => { i.value = e[i.dataset.e] || ""; }); });
 
     main.addEventListener("click", async (e) => {
-      const t = e.target.closest("[data-acao],[data-op]"); if (!t) return;
+      const t = e.target.closest("[data-acao],[data-op],[data-desconvidar]"); if (!t) return;
       try {
+        if (t.dataset.acao === "convidar") {
+          const v = (k) => $(`[data-conv="${k}"]`, main);
+          const email = v("email").value.trim().toLowerCase(), nome = v("nome").value.trim();
+          if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error("Informe um e-mail válido.");
+          const ja = S.operadores.find((o) => (o.email || "").toLowerCase() === email);
+          if (ja) {
+            const r = await ML.sb.from("fat_operadores").update({ ativo: true, admin: ja.admin || v("admin").checked, nome: ja.nome || nome }).eq("user_id", ja.user_id);
+            if (r.error) throw r.error;
+            ML.aviso(`${nome || email} já tinha cadastro e foi liberado.`, "ok");
+          } else {
+            const r = await ML.sb.from("fat_convites").upsert({ email, nome, admin: v("admin").checked, criado_por: S.op.nome || S.user.email }, { onConflict: "email" });
+            if (r.error) throw r.error;
+            ML.aviso(`Acesso liberado para ${email}. Envie o endereço do app para a pessoa.`, "ok");
+          }
+          return ML.recarregarERender();
+        }
+        if (t.dataset.desconvidar) {
+          const r = await ML.sb.from("fat_convites").delete().eq("email", t.dataset.desconvidar);
+          if (r.error) throw r.error;
+          return ML.recarregarERender();
+        }
         if (t.dataset.acao === "salvar-emi") {
           const ant = S.emissores.find((x) => x.id === emiAtual) || {};
           const dados = Object.assign({}, ant); delete dados.id;
