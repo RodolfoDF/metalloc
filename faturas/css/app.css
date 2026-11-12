@@ -325,6 +325,8 @@ table.tab { width: 100%; border-collapse: separate; border-spacing: 0; font-size
 .mapa-modal { height: 340px; border-radius: 10px; overflow: hidden; border: 1px solid var(--borda); }
 .leaflet-tile-pane { filter: grayscale(.85) contrast(1.02) brightness(1.04); }
 .leaflet-container { font: inherit; background: #eceef0; }
+/* cada mapa fica “dentro da sua caixa”: as camadas internas do Leaflet (z-index 400–1000) não passam por cima de janelas e do topo */
+.mapa-grande, .mini-mapa, .mapa-modal, .leaflet-container { position: relative; z-index: 0; isolation: isolate; }
 .pin { position: relative; transform: translate(-50%, 0); left: 16px; display: inline-flex; align-items: center; justify-content: center; min-width: 32px; height: 26px;
   padding: 0 8px; border-radius: 999px; color: #fff; font: 700 11.5px Inter, sans-serif; letter-spacing: .02em; white-space: nowrap; box-shadow: 0 3px 8px rgba(0, 0, 0, .3); border: 2px solid #fff; }
 .pin::after { content: ""; position: absolute; left: 50%; bottom: -7px; transform: translateX(-50%); border: 6px solid transparent; border-top-color: inherit; border-bottom: 0; }
