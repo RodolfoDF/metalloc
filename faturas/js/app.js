@@ -3,7 +3,7 @@
   "use strict";
   const C = window.MLCalc;
   const CFG = window.ML_CONFIG;
-  const sb = window.supabase.createClient(CFG.url, CFG.chave, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+  const sb = window.supabase.createClient(CFG.url, CFG.chave, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: "ml-faturas-sessao" } });
 
   // ================================================================ utilidades de tela
   const $ = (s, r) => (r || document).querySelector(s);
