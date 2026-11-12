@@ -186,6 +186,15 @@
       av.getCell(1).font = { bold: true, color: { argb: "FFA61B1B" } };
     }
 
+    if ((rel.parceiros || []).length) {
+      ws.addRow([]);
+      const cp = [{ t: "Empresa parceira", w: 30 }, { t: "Itens", w: 9, a: "center" }, { t: "Cobrado do cliente", w: 17, f: "R" }, { t: "Custo (pagar ao parceiro)", w: 17, f: "R" }, { t: "Margem", w: 20, f: "R" }, { t: "Comissão", w: 17, f: "R" }];
+      const tt = ws.addRow(["Sublocações por empresa parceira"]); tt.getCell(1).font = { bold: true, size: 12 };
+      cabecalho(ws, cp);
+      for (const p of rel.parceiros) linhaDados(ws, [p.parceiro, p.itens, p.locacao, p.custo, p.margem, p.comissao], cp);
+      cols.forEach((c, i) => { ws.getColumn(i + 1).width = Math.max(c.w, (cp[i] || {}).w || 0); });
+    }
+
     // Faturas
     const wf = wb.addWorksheet("Faturas", { views: [{ state: "frozen", ySplit: 4, showGridLines: false }] });
     const cf = [{ t: "Nº da fatura", w: 15, a: "center" }, { t: "Cliente", w: 38, q: 1 }, { t: rel.base === "recebido" ? "Pago em" : "Emissão", w: 12, f: "D" },
@@ -232,7 +241,30 @@
     return baixar(wb, ctx.arquivo || "Rateio.xlsx");
   }
 
-  const API = { faturas, rateio, COR };
+  // ---------------------------------------------------------------- inventário de equipamentos
+  const COR_EQ = { locado: { fundo: "FFFFE8D9", texto: "FFB4380A" }, disponivel: { fundo: "FFDDF1E0", texto: "FF1E6B35" },
+    manutencao: { fundo: "FFFFF3CD", texto: "FF8A6100" }, inativo: { fundo: "FFEDEDED", texto: "FF7F7F7F" } };
+  async function inventario(linhas, ctx) {
+    const wb = novoLivro(ctx.ExcelJS);
+    const ws = wb.addWorksheet("Equipamentos", { views: [{ state: "frozen", ySplit: 4, showGridLines: false }], pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9 } });
+    const cols = [{ t: "Tag", w: 11, a: "center" }, { t: "Tipo", w: 26 }, { t: "Apelido", w: 20 }, { t: "Marca", w: 13 }, { t: "Modelo", w: 14 },
+      { t: "Altura (m)", w: 10, a: "center" }, { t: "Alimentação", w: 12 }, { t: "Nº de série", w: 16 }, { t: "Ano", w: 7, a: "center" },
+      { t: "Donos", w: 30, q: 1 }, { t: "Situação", w: 13, a: "center" }, { t: "Cliente atual", w: 34, q: 1 }, { t: "Fatura atual", w: 14, a: "center" },
+      { t: "Período até", w: 12, f: "D" }, { t: "Local da obra", w: 34, q: 1 }];
+    titulo(ws, "Inventário de equipamentos", ctx.sub || "", cols.length);
+    cabecalho(ws, cols);
+    for (const l of linhas) {
+      const e = l.e;
+      const r = linhaDados(ws, [e.tag, e.tipo || "", e.apelido || "", e.marca || "", e.modelo || "", e.altura === "" || e.altura == null ? "" : +e.altura, e.alimentacao || "",
+        e.serie || "", e.ano || "", l.donos, l.nomeSit, l.cliente, l.fatura, dataXL(l.ate), l.local], cols);
+      const c = r.getCell(11), k = COR_EQ[l.sit];
+      if (k) { c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: k.fundo } }; c.font = { bold: true, color: { argb: k.texto } }; }
+    }
+    ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4, column: cols.length } };
+    return baixar(wb, ctx.arquivo || "Equipamentos.xlsx");
+  }
+
+  const API = { faturas, rateio, inventario, COR };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   raiz.MLRel = API;
 })(typeof window !== "undefined" ? window : globalThis);

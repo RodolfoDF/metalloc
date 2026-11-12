@@ -38,6 +38,12 @@
     dinheiro: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>',
     parar: '<rect x="5" y="5" width="14" height="14" rx="2"/>',
     usuario: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+    equip: '<path d="M4 20h16M6 20v-3h12v3M8 17l3-9M16 17l-3-9M9.5 12.5h5M7 8h10V5H7z"/>',
+    mapa: '<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
+    subir: '<path d="M12 21V9M7 14l5-5 5 5M5 3h14"/>',
+    quadro: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+    lista: '<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>',
+    alvo: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
     externo: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>',
   };
   const ic = (n) => `<i data-ic="${n}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONES[n] || ""}</svg></i>`;
@@ -127,8 +133,9 @@
   }
 
   async function carregar() {
-    const [cfg, emi, donos, cli, locs, fats, ops, conv] = await Promise.all(["fat_config", "fat_emissores", "fat_donos", "fat_clientes", "fat_locacoes", "fat_faturas", "fat_operadores", "fat_convites"].map(todos));
+    const [cfg, emi, donos, cli, locs, fats, ops, conv, eqs] = await Promise.all(["fat_config", "fat_emissores", "fat_donos", "fat_clientes", "fat_locacoes", "fat_faturas", "fat_operadores", "fat_convites", "fat_equipamentos"].map(todos));
     S.convites = conv;
+    S.equip = eqs.map((e) => Object.assign({}, e.dados, { id: e.id, tag: e.tag })).sort((a, b) => a.tag.localeCompare(b.tag, "pt-BR", { numeric: true }));
     S.cfg = Object.assign({ proximoRegistro: 1, digitosRegistro: 4, diasVencimento: 15, avisoDias: 3, textoOutrasInfo: "", comissao: { nome: "Rodolfo", pct: 5 } }, (cfg[0] || {}).dados || {});
     S.emissores = emi.sort((a, b) => a.ordem - b.ordem).map((e) => Object.assign({ id: e.id }, e.dados));
     S.donos = donos.sort((a, b) => a.ordem - b.ordem);
@@ -146,6 +153,33 @@
     for (const f of S.faturas) { if (!S.fatsDe.has(f.registro)) S.fatsDe.set(f.registro, []); S.fatsDe.get(f.registro).push(f); }
     for (const l of S.fatsDe.values()) l.sort((a, b) => a.seq - b.seq);
     S.nomes = Object.fromEntries(S.donos.map((d) => [d.id, d.nome]));
+    // equipamentos em uso: itens da fatura atual (a última) de cada locação ativa
+    S.eqId = new Map((S.equip || []).map((e) => [e.id, e]));
+    const porTag = new Map((S.equip || []).map((e) => [String(e.tag).toUpperCase(), e]));
+    S.emUso = new Map();
+    for (const l of S.locacoes) {
+      if (l.status !== "ativa") continue;
+      const lista = S.fatsDe.get(l.registro) || [], u = lista[lista.length - 1];
+      if (!u) continue;
+      for (const it of u.itens || []) {
+        if (it.frete) continue;
+        const e = (it.equipId && S.eqId.get(it.equipId)) || (it.tag && porTag.get(String(it.tag).toUpperCase()));
+        if (e && !S.emUso.has(e.id)) S.emUso.set(e.id, { l, u, it });
+      }
+    }
+  }
+  // situação do equipamento: locado (pela fatura atual) · manutenção · inativo · disponível
+  function situacaoEquip(e) {
+    if (S.emUso.has(e.id)) return "locado";
+    if (e.situacao === "manutencao") return "manutencao";
+    if (e.situacao === "inativo") return "inativo";
+    return "disponivel";
+  }
+  const NOME_SIT_EQ = { locado: "Locado", disponivel: "Disponível", manutencao: "Manutenção", inativo: "Inativo" };
+  async function carregarLeaflet() {
+    if (!document.querySelector('link[href*="leaflet.css"]')) document.head.appendChild(el('<link rel="stylesheet" href="vendor/leaflet/leaflet.css">'));
+    await carregarScript("vendor/leaflet/leaflet.js");
+    return window.L;
   }
   const ultimaFatura = (reg) => { const l = S.fatsDe.get(reg) || []; return l[l.length - 1] || null; };
   const fatura = (reg, seq) => (S.fatsDe.get(reg) || []).find((f) => f.seq === seq) || null;
@@ -363,10 +397,16 @@
     </div>
     <div class="grade" style="grid-template-columns:1.35fr 1fr;align-items:start">
       <div class="cartao"><div class="cartao-cab"><h2>Renovações dos próximos dias</h2></div>${tabelaRenovacoes(proximas)}</div>
-      <div class="cartao"><div class="cartao-cab"><h2>Últimas faturas</h2><div class="acoes"><a class="btn peq fantasma" href="#/locacoes">Ver todas</a></div></div>
-        ${tabelaFaturas(S.faturas.slice().sort(ordemRecentes).slice(0, 8), { compacta: true })}</div>
-    </div>`;
-    if (window.matchMedia("(max-width: 1180px)").matches) main.lastElementChild.style.gridTemplateColumns = "1fr";
+      <div class="cartao"><div class="cartao-cab"><h2>Na rua agora</h2><div class="acoes"><a class="btn peq fantasma" href="#/mapa">${ic("mapa")}Abrir mapa</a></div></div>
+        <div class="mini-mapa" data-mini-mapa></div><small class="muted" data-mini-info style="display:block;margin-top:8px"></small></div>
+    </div>
+    <div class="cartao" style="margin-top:14px"><div class="cartao-cab"><h2>Últimas faturas</h2><div class="acoes"><a class="btn peq fantasma" href="#/locacoes">Ver todas</a></div></div>
+      ${tabelaFaturas(S.faturas.slice().sort(ordemRecentes).slice(0, 8), { compacta: true })}</div>`;
+    if (window.matchMedia("(max-width: 1180px)").matches) $("[data-mini-mapa]", main).closest(".grade").style.gridTemplateColumns = "1fr";
+    if (ML.miniMapa) {
+      const n = ML.miniMapa($("[data-mini-mapa]", main)), sem = ML.contarSemLocal();
+      $("[data-mini-info]", main).innerHTML = `${n} locação(ões) no mapa${sem ? ` · <a href="#/mapa" style="color:var(--laranja-esc)">${sem} sem local definido</a>` : ""}`;
+    }
     main.addEventListener("click", (e) => {
       const b = e.target.closest("[data-ir],[data-acao]");
       if (!b) return;
@@ -387,10 +427,10 @@
   function tabelaRenovacoes(lista) {
     if (!lista.length) return `<div class="vazio">Nenhuma renovação nos próximos 7 dias.</div>`;
     return `<div class="tabela-wrap" style="max-height:520px"><table class="tab"><thead><tr><th>Locação</th><th>Período atual</th><th class="direita">Valor</th><th></th></tr></thead><tbody>
-      ${lista.map(({ l, u, dias }) => `<tr><td><b class="nfat">${esc(u.id)}</b><span class="cli-nome" style="max-width:260px">${esc(nomeCliente(l.clienteId))}</span><small class="muted">${esc(equipLoc(l))}</small></td>
+      ${lista.map(({ l, u, dias }) => `<tr><td><b class="nfat">${esc(u.id)}</b><span class="cli-nome" style="max-width:220px">${esc(nomeCliente(l.clienteId))}</span><small class="muted">${esc(equipLoc(l))}</small></td>
         <td class="nowrap">${C.dataBRc(u.periodoIni)} a ${C.dataBRc(u.periodoFim)}<br><span class="etq ${dias < 0 ? "verm" : dias <= avisoDias() ? "lar" : ""}">${textoDias(dias)}</span></td>
         <td class="direita num nowrap">${C.moeda(u.total)}</td>
-        <td class="acoes-td"><button class="btn peq primario" data-renovar="${l.registro}">${ic("renovar")}Renovar</button></td></tr>`).join("")}
+        <td class="acoes-td"><button class="btn peq primario" title="Renovar" data-renovar="${l.registro}">${ic("renovar")}</button></td></tr>`).join("")}
       </tbody></table></div>`;
   }
 
@@ -570,8 +610,11 @@
         <label class="campo"><span>Data de implantação</span><input type="date" name="dataInicio" value="${esc(l.dataInicio || "")}"></label>
         <label class="campo"><span>Situação da locação</span><select name="status"><option value="ativa">Ativa (gera renovações)</option><option value="encerrada" ${l.status === "encerrada" ? "selected" : ""}>Encerrada (equipamento devolvido)</option></select></label></div>
       <label class="campo"><span>Prestador de serviços</span><select name="emissorId">${S.emissores.map((e) => `<option value="${esc(e.id)}" ${e.id === l.emissorId ? "selected" : ""}>${esc(e.razaoSocial)}</option>`).join("")}</select></label>
-      <label class="campo"><span>Observações internas</span><textarea name="obs">${esc(l.obs || "")}</textarea></label></div>`);
-    modal({ titulo: "Dados da locação", corpo, botoes: [{ texto: "Cancelar" }, { texto: "Salvar", classe: "primario", acao: async () => {
+      <label class="campo"><span>Observações internas</span><textarea name="obs">${esc(l.obs || "")}</textarea></label>
+      <div class="aviso-linha" style="display:flex;align-items:center;gap:10px">${ic("mapa")}<span style="flex:1">${l.local && l.local.lat != null ? "Local da obra: " + esc(l.local.endereco || "marcado no mapa") : l.local && l.local.endereco ? "Endereço: " + esc(l.local.endereco) + " (sem ponto no mapa)" : "Local da obra ainda não definido"}</span>
+        <button type="button" class="btn peq" data-def-local>Definir no mapa</button></div></div>`);
+    corpo.addEventListener("click", (e) => { if (e.target.closest("[data-def-local]") && ML.definirLocal) { mm.fechar(); ML.definirLocal(l); } });
+    const mm = modal({ titulo: "Dados da locação", corpo, botoes: [{ texto: "Cancelar" }, { texto: "Salvar", classe: "primario", acao: async () => {
       const v = (n) => $(`[name=${n}]`, corpo).value;
       await rpc("fat_salvar_locacao", { p_registro: l.registro, p_dados: { servico: v("servico"), dataInicio: v("dataInicio"), status: v("status"), emissorId: v("emissorId"), obs: v("obs") } });
       aviso("Locação salva.", "ok");
@@ -747,6 +790,6 @@
   // expõe para os outros arquivos (editor.js, telas.js)
   window.ML = { sb, S, C, $, $$, esc, el, ic, vg, sitBadge, aviso, modal, confirmar, msgErro, rpc, carregar, recarregarERender, render, TELAS,
     hidratarIcones, salvarConfig, ultimaFatura, fatura, nomeCliente, equipLoc, abrirFatura, baixarPdf, exportarFaturas, carregarScript,
-    tabelaFaturas, ligarTabelas, renovacoes, hoje, todos, abrirEditor: null };
+    tabelaFaturas, ligarTabelas, renovacoes, hoje, todos, situacaoEquip, NOME_SIT_EQ, carregarLeaflet, editarLocacao, textoDias, avisoDias, abrirEditor: null };
   document.addEventListener("DOMContentLoaded", () => setTimeout(iniciar, 0));
 })();

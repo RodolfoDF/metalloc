@@ -268,6 +268,7 @@ table.tab { width: 100%; border-collapse: separate; border-spacing: 0; font-size
 .item-ed .desc { grid-column: 1 / -1; }
 .item-ed .meta { grid-column: 1 / 2; grid-row: 2; font-size: 12px; color: var(--suave); display: flex; gap: 4px 8px; flex-wrap: wrap; align-items: center; }
 .item-ed.frete { background: #fafafa; }
+.item-ed .sel-tag { width: auto; min-height: 28px; padding: 2px 8px; font-size: 12px; border-radius: 999px; }
 .item-ed.frete > input:first-of-type { grid-column: 1 / 2; }
 .item-ed textarea { min-height: 54px; padding: 8px 10px; resize: vertical; }
 .item-ed input { padding: 7px 9px; }
@@ -288,6 +289,64 @@ table.tab { width: 100%; border-collapse: separate; border-spacing: 0; font-size
 .rateio-mini div:last-child { border-bottom: 0; }
 .rateio-mini small { color: var(--suave); display: block; }
 .botoes-col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* ---------- equipamentos */
+.cards-eq { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.card-eq { display: flex; flex-direction: column; gap: 6px; cursor: pointer; transition: transform .12s, box-shadow .12s; padding: 16px; }
+.card-eq:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(16, 24, 40, .08); }
+.card-eq.locado { border-color: var(--laranja-borda); }
+.card-eq.inativo { opacity: .6; }
+.ce-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.ce-tipo { font-size: 14.5px; }
+.ce-donos { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #3f3f46; }
+.ce-donos i { width: 14px; height: 14px; color: var(--suave); }
+.ce-uso { margin-top: 6px; padding-top: 8px; border-top: 1px dashed var(--borda); display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.ce-uso small { color: var(--suave); }
+.txt-verm { color: var(--vermelho); font-weight: 600; }
+.tag-eq { display: inline-block; font-weight: 700; font-size: 12px; letter-spacing: .03em; background: var(--texto); color: #fff; border-radius: 6px; padding: 2px 7px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sit.eq-locado { color: var(--laranja-esc); background: var(--laranja-claro); border-color: var(--laranja-borda); }
+.sit.eq-disponivel { color: var(--verde); background: var(--verde-fundo); border-color: var(--verde-borda); }
+.sit.eq-manutencao { color: #8a6100; background: #fff6dc; border-color: #f3dd9a; }
+.sit.eq-inativo { color: var(--suave); background: var(--cinza-fundo); border-color: var(--borda); }
+.alternar button i[data-ic] { width: 15px; height: 15px; vertical-align: -3px; }
+
+/* ---------- mapa */
+.mapa-grade { display: grid; grid-template-columns: 1fr 360px; gap: 14px; }
+.mapa-cartao { padding: 6px; }
+.mapa-grande { height: calc(100vh - 210px); min-height: 420px; border-radius: 10px; overflow: hidden; }
+.mapa-lado { display: flex; flex-direction: column; max-height: calc(100vh - 198px); min-height: 432px; }
+.mapa-lista { overflow: auto; display: flex; flex-direction: column; margin: 0 -8px; }
+.ml-item { display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-bottom: 1px solid #f0f0f1; cursor: pointer; border-radius: 8px; }
+.ml-item:hover { background: #fafafa; }
+.ml-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ml-tx b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ml-tx small { color: var(--suave); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini-mapa { height: 300px; border-radius: 10px; overflow: hidden; }
+.mapa-modal { height: 340px; border-radius: 10px; overflow: hidden; border: 1px solid var(--borda); }
+.leaflet-tile-pane { filter: grayscale(.85) contrast(1.02) brightness(1.04); }
+.leaflet-container { font: inherit; background: #eceef0; }
+.pin { position: relative; transform: translate(-50%, 0); left: 16px; display: inline-flex; align-items: center; justify-content: center; min-width: 32px; height: 26px;
+  padding: 0 8px; border-radius: 999px; color: #fff; font: 700 11.5px Inter, sans-serif; letter-spacing: .02em; white-space: nowrap; box-shadow: 0 3px 8px rgba(0, 0, 0, .3); border: 2px solid #fff; }
+.pin::after { content: ""; position: absolute; left: 50%; bottom: -7px; transform: translateX(-50%); border: 6px solid transparent; border-top-color: inherit; border-bottom: 0; }
+.pin-ok { background: #27272a; border-top-color: #27272a; } .pin-ok::after { border-top-color: #27272a; }
+.pin-renovar { background: #e8590c; } .pin-renovar::after { border-top-color: #e8590c; }
+.pin-atrasada { background: #c92a2a; } .pin-atrasada::after { border-top-color: #c92a2a; }
+.pin-cobrar { background: #7048e8; } .pin-cobrar::after { border-top-color: #7048e8; }
+.pt-mapa { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.pt-mapa.pin-ok { background: #27272a; } .pt-mapa.pin-renovar { background: #e8590c; } .pt-mapa.pin-atrasada { background: #c92a2a; } .pt-mapa.pin-cobrar { background: #7048e8; }
+.pin-txt-renovar { color: #c2410c; font-weight: 600; } .pin-txt-atrasada { color: #c92a2a; font-weight: 600; }
+.legenda-mapa { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: #3f3f46; }
+.legenda-mapa span { display: inline-flex; align-items: center; gap: 6px; }
+.pop { display: flex; flex-direction: column; gap: 5px; font-size: 13px; }
+.pop small { color: var(--suave); }
+.pop-eq { display: flex; flex-wrap: wrap; gap: 4px; }
+.pop-acoes { display: flex; gap: 6px; margin-top: 4px; }
+.leaflet-popup-content-wrapper { border-radius: 12px; }
+.resultados-geo { display: flex; flex-direction: column; border: 1px solid var(--borda); border-radius: 10px; overflow: hidden; }
+.resultados-geo button { display: flex; gap: 8px; align-items: flex-start; text-align: left; border: 0; border-bottom: 1px solid #f0f0f1; background: #fff; padding: 8px 10px; cursor: pointer; font-size: 12.5px; }
+.resultados-geo button:hover { background: #fafafa; }
+.resultados-geo i { width: 15px; height: 15px; color: var(--laranja); margin-top: 1px; }
+@media (max-width: 1180px) { .mapa-grade { grid-template-columns: 1fr; } .mapa-grande { height: 60vh; } .mapa-lado { max-height: none; min-height: 0; } }
 
 /* ---------- donos */
 .cards-donos { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); margin-bottom: 14px; }

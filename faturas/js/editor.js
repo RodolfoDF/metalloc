@@ -95,7 +95,7 @@
       const per = { ini: d, fim: C.addDias(C.addMeses(d, 1), -1) };
       Object.assign(E, { clienteId: op.clienteId || "", emissorId: cfg.emissorPadraoId || (S.emissores[0] || {}).id || "", sigla: "", regAuto: true, regManual: "", seqInicial: 0,
         servico: "", dataInicio: d, dataEmissao: d, periodoIni: per.ini, periodoFim: per.fim, vencimento: C.addDias(d, dias),
-        discriminacao: "", outrasInfo: cfg.textoOutrasInfo || "", obs: "" });
+        discriminacao: "", outrasInfo: cfg.textoOutrasInfo || "", obs: "", enderecoObra: "" });
       if (E.clienteId) E.sigla = (S.cli.get(E.clienteId) || {}).sigla || C.sugerirSigla((S.cli.get(E.clienteId) || {}).razaoSocial);
     } else if (modo === "renovar") {
       loc = S.loc.get(op.registro); orig = ML.ultimaFatura(op.registro);
@@ -117,7 +117,12 @@
         itens: copia((orig.itens || []).filter((i) => !i.frete)),
         frete: fr ? { incluir: true, descricao: fr.descricao || "FRETE", qtd: fr.qtd || 1, unitario: fr.unitario || 0 } : { incluir: false, descricao: "FRETE", qtd: 1, unitario: 0 } });
     }
-    const comp = { equip: "", qtd: 1, unitario: "", donos: [], subParceiro: "", subCusto: "" };
+    const comp = { equip: "", qtd: 1, unitario: "", donos: [], subParceiro: "", subCusto: "", equipId: "", tag: "" };
+    const acharEq = (txt) => {
+      const t = String(txt || "").trim().toUpperCase(); if (!t) return null;
+      const tag = t.split(" — ")[0].trim();
+      return (S.equip || []).find((e) => e.tag.toUpperCase() === tag) || (S.equip || []).find((e) => (e.apelido || "").toUpperCase() === t) || null;
+    };
     let sujo = false;
 
     // ----------------------------- cálculos
@@ -201,11 +206,15 @@
       <section class="secao"><h3>Discriminação dos serviços</h3>
         ${modo === "nova" ? `<div class="linha-campos c2">
           <label class="campo"><span>Serviço</span><input data-k="servico" data-placeholder-servico></label>
-          <label class="campo"><span>Data de implantação</span><input type="date" data-k="dataInicio"><small>a mesma para todos os equipamentos</small></label></div>` : ""}
+          <label class="campo"><span>Data de implantação</span><input type="date" data-k="dataInicio"><small>a mesma para todos os equipamentos</small></label></div>
+        <label class="campo"><span>Endereço da obra (para o mapa — opcional)</span><input data-k="enderecoObra" placeholder="se for diferente do endereço do cliente"></label>` : ""}
         <label class="campo"><span>Texto da discriminação ${modo === "nova" ? `<a href="#" data-acao="refazer-disc" style="float:right;font-weight:400;color:var(--laranja-esc)">refazer automático</a>` : ""}</span><textarea data-k="discriminacao" rows="2"></textarea></label>
       </section>
       <section class="secao"><h3>Equipamentos <span class="dir muted" data-itens-info></span></h3>
         <div class="compositor">
+          ${(S.equip || []).length ? `<label class="campo"><span>Equipamento do inventário (tag)</span><input data-inv list="lista-inv" placeholder="Digite a tag ou o apelido — preenche tipo e donos" autocomplete="off"></label>
+          <datalist id="lista-inv">${S.equip.filter((e) => e.situacao !== "inativo").map((e) => `<option value="${esc(ML.rotuloEq(e))}">${esc(ML.NOME_SIT_EQ[ML.situacaoEquip(e)])}</option>`).join("")}</datalist>
+          <div class="aviso-linha" data-inv-info hidden></div>` : ""}
           <div class="linha-campos" style="grid-template-columns:1fr 70px 130px">
             <label class="campo"><span>Equipamento</span><input data-c="equip" list="lista-equips" placeholder="ex.: PLATAFORMA ARTICULADA"></label>
             <label class="campo"><span>Qtde</span><input data-c="qtd" inputmode="decimal" value="1"></label>
@@ -237,6 +246,20 @@
       const t = e.target, k = t.dataset.k;
       sujo = true;
       if (t.dataset.c) { comp[t.dataset.c] = t.value; return; }
+      if (t.dataset.inv != null) {
+        const eq = acharEq(t.value), info = $("[data-inv-info]", ed);
+        comp.equipId = eq ? eq.id : ""; comp.tag = eq ? eq.tag : "";
+        if (!eq) { info.hidden = true; return; }
+        comp.equip = eq.tipo || eq.apelido || ""; $('[data-c="equip"]', ed).value = comp.equip;
+        comp.donos = (eq.donos || []).map((d) => Object.assign({}, d, { tipo: C.ehSub(d) ? "sublocado" : "dono" }));
+        comp.subParceiro = eq.subParceiro || ""; comp.subCusto = eq.subCusto == null ? "" : eq.subCusto;
+        compDonos.desenhar();
+        const uso = S.emUso.get(eq.id), sitEq = ML.situacaoEquip(eq);
+        info.hidden = false;
+        info.className = "aviso-linha" + (uso && (!orig || uso.l.registro !== orig.registro) ? " lar" : sitEq === "manutencao" ? " verm" : "");
+        info.innerHTML = `<b>${esc(eq.tag)}</b> · ${esc(ML.descEq(eq))}` + (uso && (!orig || uso.l.registro !== orig.registro) ? ` — <b>já está locado</b> para ${esc(ML.nomeCliente(uso.l.clienteId))} (${esc(uso.u.id)})` : sitEq === "manutencao" ? " — <b>em manutenção</b>" : "");
+        return;
+      }
       if (!k) return;
       if (k === "clienteTxt") {
         const v = t.value.trim().toLowerCase();
@@ -298,9 +321,11 @@
       if (msg) { erro.textContent = msg; erro.hidden = false; return; }
       erro.hidden = true;
       const it = { descricao: C.descricaoPeriodo(equip, E.periodoIni, E.periodoFim), qtd: C.numBR(comp.qtd) || 1, unitario: Math.round(C.numBR(comp.unitario) * 100) / 100, periodo: true, equip };
+      if (comp.equipId) { it.equipId = comp.equipId; it.tag = comp.tag; }
       aplicarDonosNoItem(it, comp);
       E.itens.push(it);
-      Object.assign(comp, { equip: "", qtd: 1, unitario: "", donos: [], subParceiro: "", subCusto: "" });
+      Object.assign(comp, { equip: "", qtd: 1, unitario: "", donos: [], subParceiro: "", subCusto: "", equipId: "", tag: "" });
+      if ($("[data-inv]", ed)) { $("[data-inv]", ed).value = ""; $("[data-inv-info]", ed).hidden = true; }
       $('[data-c="equip"]', ed).value = ""; $('[data-c="qtd"]', ed).value = "1"; $('[data-c="unitario"]', ed).value = "";
       compDonos.desenhar();
       sujo = true; desenharItens(); atualizar();
@@ -331,7 +356,9 @@
           <button class="ic-btn peq" data-rem="${i}" title="Remover item">${ic("lixo")}</button>
           <div class="meta"><b>${C.moeda(tot)}</b> · ${txtDonos ? `Donos: ${esc(txtDonos)}` : `<span class="etq verm">sem dono definido</span>`}
             ${it.subCusto != null && it.subParceiro ? ` · custo ${C.moeda(it.subCusto)}` : ""}
-            <button class="btn peq fantasma" data-item-donos="${i}">${ic("donos")}Alterar donos</button></div></div>`;
+            <button class="btn peq fantasma" data-item-donos="${i}">${ic("donos")}Alterar donos</button>
+            ${(S.equip || []).length ? `<select data-campo="equipId" class="sel-tag" title="Equipamento do inventário"><option value="">${it.tag && !S.eqId.has(it.equipId) ? esc(it.tag) + " (fora do inventário)" : "— vincular tag —"}</option>
+              ${S.equip.map((e) => `<option value="${esc(e.id)}" ${e.id === it.equipId ? "selected" : ""}>${esc(e.tag)}${e.apelido ? " · " + esc(e.apelido) : ""}</option>`).join("")}</select>` : ""}</div></div>`;
       }).join("");
       const fr = E.frete;
       cont.innerHTML = (linhas || `<div class="vazio" style="padding:14px">Nenhum equipamento inserido ainda. Use o quadro acima.</div>`) + `
@@ -355,6 +382,16 @@
       }
       if (!box || !t.dataset.campo) return;
       const it = E.itens[+box.dataset.i], k = t.dataset.campo;
+      if (k === "equipId") {
+        const eq = S.eqId.get(t.value);
+        if (!eq) { delete it.equipId; delete it.tag; return atualizar(); }
+        it.equipId = eq.id; it.tag = eq.tag;
+        if ((eq.donos || []).length) {
+          aplicarDonosNoItem(it, { donos: eq.donos.map((d) => Object.assign({}, d)), subParceiro: eq.subParceiro || "", subCusto: eq.subCusto == null ? "" : eq.subCusto });
+          ML.aviso(`Tag ${eq.tag} vinculada · donos conforme o inventário.`);
+        }
+        desenharItens(); return atualizar();
+      }
       if (k === "descricao") { it.descricao = t.value; }
       else if (k === "qtd") it.qtd = C.numBR(t.value);
       else it.unitario = C.numBR(t.value);
@@ -436,7 +473,8 @@
             if (r.error) throw r.error;
           }
           const r = await ML.rpc("fat_nova_locacao", { p_loc: { clienteId: E.clienteId, emissorId: E.emissorId, registro: E.regAuto ? null : +E.regManual,
-            seqInicial: +E.seqInicial || 0, servico: servicoEfetivo(), dataInicio: E.dataInicio, equipamento: equipsTxt(), obs: "" }, p_fat: pf });
+            seqInicial: +E.seqInicial || 0, servico: servicoEfetivo(), dataInicio: E.dataInicio, equipamento: equipsTxt(), obs: "",
+            local: (E.enderecoObra || "").trim() ? { endereco: E.enderecoObra.trim() } : null }, p_fat: pf });
           nova = r.fatura;
         } else if (modo === "renovar") {
           nova = await ML.rpc("fat_renovar", { p_registro: orig.registro, p_seq_esperado: orig.seq + 1, p_fat: pf });

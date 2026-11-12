@@ -177,7 +177,8 @@
     const rel = { de: o.de || "", ate: o.ate || "", base, comissaoNome: o.comissaoNome || "Comissão", comPct: o.comPct != null ? o.comPct : 5,
       faturas: 0, locacao: 0, frete: 0, custo: 0, comissao: 0, liquido: 0, semDono: 0, donos: [], linhas: [] };
     rel.periodoTexto = rel.de && rel.ate ? `${dataBR(rel.de)} a ${dataBR(rel.ate)}` : rel.de ? `a partir de ${dataBR(rel.de)}` : rel.ate ? `até ${dataBR(rel.ate)}` : "todo o período";
-    const acc = new Map(), soma = { loc: 0, fre: 0, cus: 0, com: 0 };
+    const acc = new Map(), soma = { loc: 0, fre: 0, cus: 0, com: 0 }, parc = new Map();
+    const C2 = (t) => semAcento(t).toUpperCase().replace(/\s+/g, " ");
     for (const f of faturas) {
       let data = f.dataEmissao;
       if (base === "recebido") { if (f.status !== "paga") continue; data = f.pagoEm || ""; }
@@ -192,6 +193,13 @@
         const a = acc.get(p.donoId);
         a.faturas++; a.b += cents(p.bruto); a.c += cents(p.custo); a.m += cents(p.comissao); a.fr += cents(p.frete);
       }
+      for (const it of f.itens || []) {
+        if (it.frete || !it.subParceiro || !(it.donos || []).some(ehSub)) continue;
+        const k = String(it.subParceiro).trim(), pk = C2(k);
+        if (!parc.has(pk)) parc.set(pk, { parceiro: k, itens: 0, faturas: new Set(), b: 0, c: 0 });
+        const a = parc.get(pk);
+        a.itens++; a.faturas.add(f.id); a.b += cents((+it.qtd || 0) * (+it.unitario || 0)); a.c += cents(it.subCusto);
+      }
       rel.linhas.push({ id: f.id, registro: f.registro, seq: f.seq, cliente: (f.tomador || {}).razaoSocial || "", data, emissao: f.dataEmissao,
         pagoEm: f.pagoEm || "", situacao: situacao(f, o.hoje), total: +f.total || 0, donos: textoDonos(f, o.nomes), r });
     }
@@ -201,6 +209,8 @@
     rel.donos = [...acc.values()].map((a) => ({ donoId: a.donoId, nome: a.nome, sublocado: a.sublocado, faturas: a.faturas,
       bruto: reais(a.b), custo: reais(a.c), comissao: reais(a.m), liquido: reais(a.b - a.c - a.m), frete: reais(a.fr) }))
       .sort((x, y) => (x.donoId === "" ? 1e9 : ordem.has(x.donoId) ? ordem.get(x.donoId) : 1e8) - (y.donoId === "" ? 1e9 : ordem.has(y.donoId) ? ordem.get(y.donoId) : 1e8) || x.nome.localeCompare(y.nome));
+    rel.parceiros = [...parc.values()].map((a) => ({ parceiro: a.parceiro, itens: a.itens, faturas: a.faturas.size, locacao: reais(a.b), custo: reais(a.c),
+      margem: reais(a.b - a.c), comissao: reais(Math.max(0, arredInt((a.b - a.c) * Math.round(rel.comPct * 1000), 100000))) })).sort((x, y) => y.custo - x.custo);
     rel.linhas.sort((a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : a.registro - b.registro || a.seq - b.seq));
     return rel;
   }
