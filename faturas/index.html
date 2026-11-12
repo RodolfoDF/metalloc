@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Metal Loc · Faturas</title>
+<link rel="icon" href="img/icone.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css?v=2.0.0">
+</head>
+<body>
+<div id="carregando" class="tela-cheia"><div class="spinner"></div></div>
+
+<!-- ============ login ============ -->
+<section id="tela-login" class="tela-cheia login" hidden>
+  <form class="login-card" id="form-login" autocomplete="on">
+    <img src="img/logo.png" alt="Metal Loc" class="login-logo">
+    <h1 id="login-titulo">Entrar</h1>
+    <p class="muted" id="login-sub">Faturas de locação</p>
+    <label class="campo" data-cadastro hidden><span>Seu nome</span><input name="nome" autocomplete="name"></label>
+    <label class="campo"><span>E-mail</span><input name="email" type="email" required autocomplete="username"></label>
+    <label class="campo" data-senha><span>Senha</span><input name="senha" type="password" required minlength="6" autocomplete="current-password"></label>
+    <div class="erro" id="login-erro" hidden></div>
+    <div class="ok" id="login-ok" hidden></div>
+    <button class="btn primario largo" id="login-botao">Entrar</button>
+    <div class="login-links">
+      <a href="#" id="login-alternar">Primeiro acesso? Criar conta</a>
+      <a href="#" id="login-esqueci">Esqueci a senha</a>
+    </div>
+  </form>
+</section>
+
+<!-- ============ aguardando liberação ============ -->
+<section id="tela-espera" class="tela-cheia login" hidden>
+  <div class="login-card">
+    <img src="img/logo.png" alt="Metal Loc" class="login-logo">
+    <h1>Aguardando liberação</h1>
+    <p class="muted">Seu acesso foi registrado. Peça ao administrador para liberar seu usuário em <b>Configurações → Operadores</b>.</p>
+    <p class="muted" id="espera-email"></p>
+    <button class="btn largo" id="espera-verificar">Já fui liberado</button>
+    <button class="btn fantasma largo" data-sair>Sair</button>
+  </div>
+</section>
+
+<!-- ============ app ============ -->
+<div id="app" hidden>
+  <aside class="lateral" id="lateral">
+    <div class="marca"><span class="marca-ic">ML</span><div><b>Metal Loc</b><small>Faturas de locação</small></div></div>
+    <nav>
+      <div class="grupo">Hoje</div>
+      <a href="#/painel" data-rota="painel"><i data-ic="painel"></i>Painel</a>
+      <div class="grupo">Gestão</div>
+      <a href="#/locacoes" data-rota="locacoes"><i data-ic="locacoes"></i>Locações e faturas<span class="contador" id="nav-renovar" hidden></span></a>
+      <a href="#/clientes" data-rota="clientes"><i data-ic="clientes"></i>Clientes</a>
+      <a href="#/donos" data-rota="donos"><i data-ic="donos"></i>Donos e comissão</a>
+      <div class="grupo">Sistema</div>
+      <a href="#/config" data-rota="config"><i data-ic="config"></i>Configurações</a>
+    </nav>
+    <div class="usuario">
+      <span class="avatar" id="u-avatar">?</span>
+      <div><b id="u-nome"></b><small id="u-papel"></small></div>
+      <button class="ic-btn" data-sair title="Sair"><i data-ic="sair"></i></button>
+    </div>
+  </aside>
+  <div class="principal">
+    <header class="topo">
+      <button class="ic-btn menu-mobile" id="btn-menu" title="Menu"><i data-ic="menu"></i></button>
+      <div class="data-hoje" id="data-hoje"></div>
+      <label class="busca"><i data-ic="busca"></i><input id="busca-global" placeholder="Buscar cliente, fatura ou equipamento"><kbd>Ctrl K</kbd></label>
+      <button class="ic-btn" id="btn-atualizar" title="Atualizar dados"><i data-ic="atualizar"></i></button>
+    </header>
+    <main id="conteudo"></main>
+  </div>
+</div>
+
+<div id="camada-modais"></div>
+<div id="avisos" aria-live="polite"></div>
+
+<script src="js/config.js?v=2.0.0"></script>
+<script src="vendor/supabase.js"></script>
+<script src="vendor/jspdf.umd.min.js"></script>
+<script src="js/calc.js?v=2.0.0"></script>
+<script src="js/pdf.js?v=2.0.0"></script>
+<script src="js/relatorios.js?v=2.0.0"></script>
+<script src="js/app.js?v=2.0.0"></script>
+<script src="js/editor.js?v=2.0.0"></script>
+<script src="js/telas.js?v=2.0.0"></script>
+</body>
+</html>
