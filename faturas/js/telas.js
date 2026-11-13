@@ -223,6 +223,87 @@
     } }] });
   }
 
+  // ================================================================ ALERTAS NO WHATSAPP
+  const DIAS_SEM = ["", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+  const textoDiasSem = (d) => { d = (d || []).slice().sort(); const k = d.join(","); return k === "1,2,3,4,5,6,7" ? "todos os dias" : k === "1,2,3,4,5" ? "seg a sex" : k === "1,2,3,4,5,6" ? "seg a sáb" : d.map((x) => DIAS_SEM[x]).join(", "); };
+  const fone = (t) => { const d = String(t || "").replace(/\D/g, ""); const m = /^55(\d{2})(\d{4,5})(\d{4})$/.exec(d); return m ? `+55 ${m[1]} ${m[2]}-${m[3]}` : t; };
+  function cartaoAlertas() {
+    const lista = S.alertas || [];
+    return `<div class="cartao"><div class="cartao-cab"><h2>Alertas no WhatsApp</h2>
+        <div class="acoes"><button class="btn peq" data-acao="previa-alerta">${ic("olho")}Ver mensagem de hoje</button><button class="btn peq" data-alerta="">${ic("mais")}Adicionar número</button></div></div>
+      <p class="muted" style="margin:0 0 12px;font-size:13px">Todo dia, no horário escolhido, o servidor manda um resumo: locações a renovar, faturas vencidas e as que vencem nos próximos 3 dias. Funciona mesmo com o app fechado.</p>
+      ${lista.length ? `<div class="tabela-wrap"><table class="tab"><tbody>${lista.map((a) => {
+        const ok = /^enviado/.test(a.ultimo_resultado || ""), semChave = !a.apikey;
+        return `<tr><td><b>${esc(a.nome || "—")}</b><small class="muted" style="display:block">${esc(fone(a.telefone))}</small></td>
+          <td class="nowrap">${a.ativo ? `${String(a.hora).padStart(2, "0")}:00 · ${esc(textoDiasSem(a.dias))}` : '<span class="etq">pausado</span>'}</td>
+          <td>${semChave ? '<span class="etq lar">falta ativar</span>' : a.ultimo_em ? `<span class="etq ${ok ? "" : "verm"}" title="${esc(a.ultimo_resultado || "")}">${ok ? "último envio" : "falhou"} ${C.carimbo(new Date(a.ultimo_em).toLocaleString("sv-SE").replace(" ", "T")).slice(0, 16)}</span>` : '<span class="etq">aguardando 1º envio</span>'}</td>
+          <td class="acoes-td"><button class="btn peq" data-alerta-teste="${a.id}" ${semChave ? "disabled" : ""}>Enviar teste</button><button class="ic-btn peq" title="Editar" data-alerta="${a.id}">${ic("editar")}</button></td></tr>`;
+      }).join("")}</tbody></table></div>` : `<div class="vazio">Nenhum número cadastrado.</div>`}</div>`;
+  }
+  function editarAlerta(a) {
+    const x = a || { nome: "", telefone: "+55 61 ", apikey: "", hora: 8, dias: [1, 2, 3, 4, 5, 6], ativo: true };
+    const corpo = el(`<div style="display:flex;flex-direction:column;gap:12px">
+      <div class="aviso-linha lar" style="line-height:1.55"><b>Ativação (uma vez, no celular que vai receber):</b><br>
+        1. Salve nos contatos o número <b>+34 644 26 33 77</b> (CallMeBot).<br>
+        2. Mande para ele, pelo WhatsApp, a mensagem: <b>I allow callmebot to send me messages</b><br>
+        3. Em até 2 minutos ele responde com <i>“Your APIKEY is 123456”</i>. Copie esse número no campo <b>Chave</b> abaixo.<br>
+        <small>Se não responder, o número do robô pode ter mudado: confira em callmebot.com.</small></div>
+      <div class="linha-campos c2">
+        <label class="campo"><span>Nome</span><input name="nome" value="${esc(x.nome)}" placeholder="ex.: Escritório"></label>
+        <label class="campo"><span>WhatsApp (com DDD)</span><input name="telefone" value="${esc(fone(x.telefone))}"></label></div>
+      <div class="linha-campos c2">
+        <label class="campo"><span>Chave (APIKEY do CallMeBot)</span><input name="apikey" value="${esc(x.apikey || "")}" autocomplete="off"></label>
+        <label class="campo"><span>Horário do resumo</span><select name="hora">${Array.from({ length: 17 }, (_, i) => i + 6).map((h) => `<option value="${h}" ${h === x.hora ? "selected" : ""}>${String(h).padStart(2, "0")}:00</option>`).join("")}</select></label></div>
+      <div><div class="muted" style="font-size:12.5px;margin-bottom:6px">Dias da semana</div><div class="chips">${[1, 2, 3, 4, 5, 6, 7].map((d) => `<label class="dono-chip ${(x.dias || []).includes(d) ? "marcado" : ""}"><input type="checkbox" name="dia" value="${d}" ${(x.dias || []).includes(d) ? "checked" : ""}>${DIAS_SEM[d]}</label>`).join("")}</div></div>
+      <label class="check"><input type="checkbox" name="ativo" ${x.ativo ? "checked" : ""}> Enviar o resumo diário</label>
+      ${a && a.ultimo_resultado ? `<small class="muted">Último resultado: ${esc(a.ultimo_resultado)}</small>` : ""}</div>`);
+    corpo.addEventListener("change", (e) => { if (e.target.name === "dia") e.target.closest(".dono-chip").classList.toggle("marcado", e.target.checked); });
+    const v = (n) => $(`[name=${n}]`, corpo);
+    const botoes = [{ texto: "Cancelar" }, { texto: "Salvar", classe: "primario", acao: async () => {
+      let tel = v("telefone").value.replace(/\D/g, "");
+      if (tel.length === 10 || tel.length === 11) tel = "55" + tel;
+      if (!/^55\d{10,11}$/.test(tel)) throw new Error("Informe o WhatsApp com DDD, ex.: +55 61 9102-5021.");
+      const dias = $$("[name=dia]:checked", corpo).map((c) => +c.value);
+      if (!dias.length) throw new Error("Marque pelo menos um dia da semana.");
+      const reg = { nome: v("nome").value.trim(), telefone: "+" + tel, apikey: v("apikey").value.trim(), hora: +v("hora").value, dias, ativo: v("ativo").checked };
+      const r = a ? await ML.sb.from("fat_alertas").update(reg).eq("id", a.id) : await ML.sb.from("fat_alertas").insert(reg);
+      if (r.error) throw r.error;
+      ML.aviso("Alerta salvo.", "ok"); await ML.recarregarERender();
+    } }];
+    if (a) botoes.unshift({ texto: "Excluir", classe: "perigo", esquerda: true, acao: async () => {
+      if (!await ML.confirmar("Excluir número", "Parar de enviar o resumo para este número?", "Excluir", true)) return false;
+      const r = await ML.sb.from("fat_alertas").delete().eq("id", a.id); if (r.error) throw r.error;
+      await ML.recarregarERender();
+    } });
+    ML.modal({ titulo: a ? "Alerta no WhatsApp" : "Novo número para alertas", corpo, classe: "medio", botoes });
+  }
+  async function chamarAlertas(corpo) {
+    const { data, error } = await ML.sb.functions.invoke("alertas-whatsapp", { body: corpo });
+    if (error) {
+      let m = error.message;
+      try { const j = await error.context.json(); m = j.erro || m; } catch (e) { /* mantém */ }
+      throw new Error(m);
+    }
+    return data;
+  }
+  async function previaAlerta(bt) {
+    bt.disabled = true;
+    try {
+      const r = await chamarAlertas({ acao: "previa" });
+      ML.modal({ titulo: "Mensagem de hoje", corpo: `<pre class="previa-zap">${esc(r.texto).replace(/\*([^*\n]+)\*/g, "<b>$1</b>")}</pre>`, classe: "medio" });
+    } catch (e) { ML.aviso(ML.msgErro(e), "erro"); }
+    finally { bt.disabled = false; }
+  }
+  async function testarAlerta(id, bt) {
+    bt.disabled = true; ML.aviso("Enviando teste…");
+    try {
+      const r = await chamarAlertas({ acao: "teste", id });
+      ML.aviso(r.ok ? "Teste enviado — confira o WhatsApp em alguns segundos." : "O WhatsApp recusou: " + r.resposta, r.ok ? "ok" : "erro");
+      await ML.recarregarERender();
+    } catch (e) { ML.aviso(ML.msgErro(e), "erro"); }
+    finally { bt.disabled = false; }
+  }
+
   // ================================================================ CONFIGURAÇÕES
   ML.TELAS.config = function (main) {
     const cfg = S.cfg, admin = !!(S.op && S.op.admin);
@@ -246,6 +327,7 @@
               <label class="campo"><span>Aviso de renovação</span><input type="number" min="0" data-c="avisoDias" value="${esc(cfg.avisoDias)}"><small>dias antes do fim</small></label></div>
             <label class="campo" style="margin-top:12px"><span>Texto padrão de “Outras informações”</span><textarea data-c="textoOutrasInfo" rows="3">${esc(cfg.textoOutrasInfo || "")}</textarea></label>
             <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn primario" data-acao="salvar-cfg">Salvar</button></div></div>
+          ${admin ? cartaoAlertas() : ""}
         </div>
         <div class="grade">
           <div class="cartao"><div class="cartao-cab"><h2>Operadores</h2></div>
@@ -280,8 +362,11 @@
     if (sel) sel.addEventListener("change", () => { emiAtual = sel.value; const e = S.emissores.find((x) => x.id === emiAtual) || {}; $$("[data-e]", main).forEach((i) => { i.value = e[i.dataset.e] || ""; }); });
 
     main.addEventListener("click", async (e) => {
-      const t = e.target.closest("[data-acao],[data-op],[data-desconvidar]"); if (!t) return;
+      const t = e.target.closest("[data-acao],[data-op],[data-desconvidar],[data-alerta],[data-alerta-teste]"); if (!t) return;
       try {
+        if (t.dataset.alerta != null) return editarAlerta(S.alertas.find((a) => String(a.id) === t.dataset.alerta) || null);
+        if (t.dataset.alertaTeste) return testarAlerta(+t.dataset.alertaTeste, t);
+        if (t.dataset.acao === "previa-alerta") return previaAlerta(t);
         if (t.dataset.acao === "convidar") {
           const v = (k) => $(`[data-conv="${k}"]`, main);
           const email = v("email").value.trim().toLowerCase(), nome = v("nome").value.trim();

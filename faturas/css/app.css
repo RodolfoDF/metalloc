@@ -350,6 +350,9 @@ table.tab { width: 100%; border-collapse: separate; border-spacing: 0; font-size
 .resultados-geo i { width: 15px; height: 15px; color: var(--laranja); margin-top: 1px; }
 @media (max-width: 1180px) { .mapa-grade { grid-template-columns: 1fr; } .mapa-grande { height: 60vh; } .mapa-lado { max-height: none; min-height: 0; } }
 
+.previa-zap { white-space: pre-wrap; font: 13.5px/1.5 Inter, "Segoe UI", sans-serif; background: #e7f6e9; border: 1px solid #c6e8cb; border-radius: 12px; padding: 14px 16px; margin: 0; }
+.dono-chip input { display: none; }
+
 /* ---------- donos */
 .cards-donos { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); margin-bottom: 14px; }
 .card-dono h3 { font-size: 14px; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }

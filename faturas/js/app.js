@@ -133,8 +133,9 @@
   }
 
   async function carregar() {
-    const [cfg, emi, donos, cli, locs, fats, ops, conv, eqs] = await Promise.all(["fat_config", "fat_emissores", "fat_donos", "fat_clientes", "fat_locacoes", "fat_faturas", "fat_operadores", "fat_convites", "fat_equipamentos"].map(todos));
+    const [cfg, emi, donos, cli, locs, fats, ops, conv, eqs, alertas] = await Promise.all(["fat_config", "fat_emissores", "fat_donos", "fat_clientes", "fat_locacoes", "fat_faturas", "fat_operadores", "fat_convites", "fat_equipamentos", "fat_alertas"].map(todos));
     S.convites = conv;
+    S.alertas = alertas.sort((a, b) => a.id - b.id);
     S.equip = eqs.map((e) => Object.assign({}, e.dados, { id: e.id, tag: e.tag })).sort((a, b) => a.tag.localeCompare(b.tag, "pt-BR", { numeric: true }));
     S.cfg = Object.assign({ proximoRegistro: 1, digitosRegistro: 4, diasVencimento: 15, avisoDias: 3, textoOutrasInfo: "", comissao: { nome: "Rodolfo", pct: 5 } }, (cfg[0] || {}).dados || {});
     S.emissores = emi.sort((a, b) => a.ordem - b.ordem).map((e) => Object.assign({ id: e.id }, e.dados));
