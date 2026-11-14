@@ -244,6 +244,7 @@
     if (campo("regAuto")) campo("regAuto").value = E.regAuto ? "1" : "0";
     if (campo("clienteTxt") && cliente()) campo("clienteTxt").value = cliente().razaoSocial;
 
+    if (ML.autocompletarEndereco && campo("enderecoObra")) ML.autocompletarEndereco(campo("enderecoObra"));
     const compDonos = seletorDonos($("[data-comp-donos]", ed), comp, () => {});
     ed.addEventListener("input", (e) => {
       const t = e.target, k = t.dataset.k;
@@ -477,7 +478,8 @@
           }
           const r = await ML.rpc("fat_nova_locacao", { p_loc: { clienteId: E.clienteId, emissorId: E.emissorId, registro: E.regAuto ? null : +E.regManual,
             seqInicial: +E.seqInicial || 0, servico: servicoEfetivo(), dataInicio: E.dataInicio, equipamento: equipsTxt(), obs: "",
-            local: (E.enderecoObra || "").trim() || (E.localNome || "").trim() ? { endereco: (E.enderecoObra || "").trim(), nome: (E.localNome || "").trim().toUpperCase() } : null }, p_fat: pf });
+            local: (E.enderecoObra || "").trim() || (E.localNome || "").trim() ? Object.assign({ endereco: (E.enderecoObra || "").trim(), nome: (E.localNome || "").trim().toUpperCase() },
+              (() => { const r = ML.coordsEscolhidas ? ML.coordsEscolhidas(campo("enderecoObra")) : null; return r ? ML.localDeSugestao(r) : {}; })()) : null }, p_fat: pf });
           nova = r.fatura;
         } else if (modo === "renovar") {
           nova = await ML.rpc("fat_renovar", { p_registro: orig.registro, p_seq_esperado: orig.seq + 1, p_fat: pf });

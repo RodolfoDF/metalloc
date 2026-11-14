@@ -363,6 +363,22 @@ table.tab { width: 100%; border-collapse: separate; border-spacing: 0; font-size
 .pop-eq { display: flex; flex-wrap: wrap; gap: 4px; }
 .pop-acoes { display: flex; gap: 6px; margin-top: 4px; }
 .leaflet-popup-content-wrapper { border-radius: 12px; }
+/* Google Maps: marcador com o mesmo visual (âncora = ponta de baixo) e balão */
+.pin-g { padding-bottom: 7px; }
+.pin-g .pin { left: 0; transform: none; }
+.mapa-google .gm-style-iw { font: inherit; }
+.mapa-google .gm-style-iw-chr { height: 26px; }
+/* sugestões de endereço */
+.ac-caixa { position: relative; }
+.ac-lista { position: absolute; left: 0; right: 0; top: 100%; margin-top: 4px; z-index: 50; background: #fff; border: 1px solid var(--borda); border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .14); overflow: hidden; display: flex; flex-direction: column; }
+.ac-lista[hidden] { display: none; }
+.ac-lista button { display: flex; gap: 8px; align-items: flex-start; text-align: left; border: 0; border-bottom: 1px solid #f0f0f1; background: #fff; padding: 8px 10px; cursor: pointer; font: inherit; font-size: 13px; }
+.ac-lista button:hover, .ac-lista button.ativo { background: #fff4ec; }
+.ac-lista button span { display: flex; flex-direction: column; min-width: 0; }
+.ac-lista button small { color: var(--suave); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ac-lista i { width: 15px; height: 15px; color: var(--laranja); margin-top: 2px; flex: none; }
+.ac-rodape { font-size: 11px; color: var(--suave); text-align: right; padding: 4px 10px; background: #fafafa; }
 .resultados-geo { display: flex; flex-direction: column; border: 1px solid var(--borda); border-radius: 10px; overflow: hidden; }
 .resultados-geo button { display: flex; gap: 8px; align-items: flex-start; text-align: left; border: 0; border-bottom: 1px solid #f0f0f1; background: #fff; padding: 8px 10px; cursor: pointer; font-size: 12.5px; }
 .resultados-geo button:hover { background: #fafafa; }

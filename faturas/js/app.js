@@ -663,12 +663,15 @@
       <div class="aviso-linha" style="display:flex;align-items:center;gap:10px">${ic("mapa")}<span style="flex:1">${l.local && l.local.lat != null ? "Local da obra: " + esc(l.local.endereco || "marcado no mapa") : l.local && l.local.endereco ? "Endereço: " + esc(l.local.endereco) + " (sem ponto no mapa)" : "Local da obra ainda não definido"}</span>
         <button type="button" class="btn peq" data-def-local>Definir no mapa</button></div></div>`);
     corpo.addEventListener("click", (e) => { if (e.target.closest("[data-def-local]") && ML.definirLocal) { mm.fechar(); ML.definirLocal(l); } });
+    if (ML.autocompletarEndereco) ML.autocompletarEndereco($("[name=enderecoObra]", corpo));
     const mm = modal({ titulo: "Dados da locação", corpo, botoes: [{ texto: "Cancelar" }, { texto: "Salvar", classe: "primario", acao: async () => {
       const v = (n) => $(`[name=${n}]`, corpo).value;
+      // endereço escolhido nas sugestões do Google: já vem com o ponto exato
+      const esc0 = ML.coordsEscolhidas ? ML.coordsEscolhidas($("[name=enderecoObra]", corpo)) : null;
       await rpc("fat_salvar_locacao", { p_registro: l.registro, p_dados: { servico: v("servico"), dataInicio: v("dataInicio"), status: v("status"), emissorId: v("emissorId"), obs: v("obs"),
-        local: Object.assign({}, l.local || {}, { nome: v("localNome").trim().toUpperCase(), endereco: v("enderecoObra").trim() }) } });
+        local: Object.assign({}, l.local || {}, { nome: v("localNome").trim().toUpperCase(), endereco: v("enderecoObra").trim() }, esc0 ? ML.localDeSugestao(esc0) : {}) } });
       aviso("Locação salva.", "ok");
-      const mudouEnd = v("enderecoObra").trim() !== ((l.local || {}).endereco || "");
+      const mudouEnd = !esc0 && v("enderecoObra").trim() !== ((l.local || {}).endereco || "");
       await recarregarERender();
       const atual = S.loc.get(l.registro);
       if (ML.localizarLocacao && atual && atual.status === "ativa" && (mudouEnd || !(atual.local && atual.local.lat != null))) {
