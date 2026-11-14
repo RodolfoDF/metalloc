@@ -28,7 +28,7 @@
   function pin(L, x) {
     const rot = esc(x.cli.sigla || String(x.l.registro));
     return L.divIcon({ className: "", iconSize: null, iconAnchor: [16, 34], popupAnchor: [0, -30],
-      html: `<div class="pin pin-${x.estado}"><span>${rot}</span></div>` });
+      html: `<div class="pin pin-${x.estado} ${x.l.local && /bairro|rua/.test(x.l.local.precisao || "") ? "pin-aprox" : ""}"><span>${rot}</span></div>` });
   }
   function popupHtml(x) {
     return `<div class="pop"><b>${esc(x.cli.razaoSocial || "")}</b>
@@ -37,6 +37,7 @@
       <div class="pop-eq">${x.equips.map((e) => `<span class="etq">${esc(e)}</span>`).join(" ") || '<span class="muted">sem equipamento</span>'}</div>
       ${x.u && x.u.periodoFim ? `<div>Período até <b>${C.dataBR(x.u.periodoFim)}</b> · <span class="pin-txt-${x.estado}">${esc(x.dias != null ? ML.textoDias(x.dias) : "")}</span></div>` : ""}
       ${x.l.local && x.l.local.endereco ? `<small class="muted">${esc(x.l.local.endereco)}</small>` : ""}
+      ${x.l.local && /bairro|rua/.test(x.l.local.precisao || "") ? `<small class="pin-txt-renovar">posição ${esc(ML.textoPrecisao(x.l.local.precisao))} — confira</small>` : x.l.local && x.l.local.fonte === "cliente" ? `<small class="muted">marcado pelo endereço do cliente</small>` : ""}
       <div class="pop-acoes"><button class="btn peq primario" data-pop-renovar="${x.l.registro}">${ic("renovar")}Renovar</button>
         <button class="btn peq" data-pop-local="${x.l.registro}">${ic("mapa")}Mudar local</button></div></div>`;
   }
@@ -57,7 +58,8 @@
     main.innerHTML = `
       <div class="pag-cab"><h1>Mapa</h1>
         <div class="legenda-mapa">${["ok", "renovar", "atrasada", "cobrar"].map((k) => `<span><i class="pt-mapa pin-${k}"></i>${NOME_EST[k]}</span>`).join("")}</div>
-        <div class="sub">${lista.length} locações ativas · ${nEq} equipamento(s) na rua · ${cont.semlocal ? `<b>${cont.semlocal} sem local definido</b>` : "todas com local"}</div></div>
+        ${cont.semlocal ? `<button class="btn primario" data-acao="localizar-todas">${ic("alvo")}Localizar automaticamente (${cont.semlocal})</button>` : ""}
+        <div class="sub">${lista.length} locações ativas · ${nEq} equipamento(s) na rua · ${cont.semlocal ? `<b>${cont.semlocal} sem ponto no mapa</b>` : "todas no mapa"}</div></div>
       <div class="mapa-grade">
         <div class="cartao mapa-cartao"><div class="mapa-grande" data-mapa></div></div>
         <div class="cartao mapa-lado">
@@ -87,7 +89,8 @@
       setTimeout(() => m.invalidateSize(), 60);
     }).catch((e) => { div.innerHTML = `<div class="vazio">Não consegui carregar o mapa: ${esc(ML.msgErro(e))}</div>`; });
     main.addEventListener("click", (e) => {
-      const t = e.target.closest("[data-filtro],[data-ir],[data-local],[data-pop-renovar],[data-pop-local],[data-reg]"); if (!t) return;
+      const t = e.target.closest("[data-filtro],[data-ir],[data-local],[data-pop-renovar],[data-pop-local],[data-reg],[data-acao]"); if (!t) return;
+      if (t.dataset.acao === "localizar-todas") return localizarTodas(lista);
       if (t.dataset.filtro) { st.filtro = t.dataset.filtro; return ML.render(); }
       if (t.dataset.popRenovar) return ML.abrirEditor({ modo: "renovar", registro: +t.dataset.popRenovar });
       if (t.dataset.popLocal || t.dataset.local) return definirLocal(S.loc.get(+(t.dataset.popLocal || t.dataset.local)));
@@ -116,6 +119,119 @@
   };
   ML.contarSemLocal = () => ativas().filter((x) => !x.temPos).length;
 
+  // ================================================================ busca automática de endereço (OpenStreetMap)
+  // Tenta, em ordem: endereço completo → CEP (ViaCEP) → endereço simplificado → bairro.
+  // Só aceita resultado de rua ou bairro (cidade inteira não serve para o mapa).
+  const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+  let ultimaConsulta = 0;
+  async function nominatim(q) {
+    const falta = 1100 - (Date.now() - ultimaConsulta); // regra do serviço gratuito: 1 consulta por segundo
+    if (falta > 0) await esperar(falta);
+    ultimaConsulta = Date.now();
+    const r = await fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=br&limit=5&accept-language=pt-BR&q=" + encodeURIComponent(q), { headers: { Accept: "application/json" } });
+    if (!r.ok) throw new Error("busca de endereço indisponível (" + r.status + ")");
+    return r.json();
+  }
+  // tipo do que foi achado: "lugar" (rua, prédio, comércio…), "regiao" (bairro / região administrativa) ou "cidade"
+  function tipoAchado(x, cidade, uf) {
+    const cat = String(x.category || x.class || ""), at = String(x.addresstype || x.type || "");
+    if (/^(highway|building|amenity|shop|office|craft|tourism|leisure|man_made|landuse|railway|healthcare|emergency|club|historic|aeroway)$/.test(cat)) return "lugar";
+    if (/suburb|neighbourhood|quarter|city_district|borough|hamlet|village|isolated_dwelling|locality|allotments|residential|farm/.test(at)) return "regiao";
+    if (/city|town|municipality/.test(at)) {
+      // no DF as regiões administrativas (Samambaia, Sobradinho…) aparecem como "cidade": valem como região
+      const nome = C.semAcento(String(x.name || x.display_name || "").split(",")[0]).toUpperCase().trim();
+      if (String(uf || "").toUpperCase() === "DF" && nome && nome !== C.semAcento(cidade || "BRASILIA").toUpperCase().trim() && nome !== "BRASILIA") return "regiao";
+    }
+    return "cidade";
+  }
+  async function viaCep(cep) {
+    const d = String(cep || "").replace(/\D/g, "");
+    if (d.length !== 8) return null;
+    try { const r = await fetch(`https://viacep.com.br/ws/${d}/json/`); const j = await r.json(); return j && !j.erro ? j : null; } catch (e) { return null; }
+  }
+  // tira complementos (lote, bloco, conjunto, sala, nº…) mantendo quadra, rua e bairro; só palavras inteiras
+  const simplificar = (t) => String(t || "").replace(/\b(EDIF[IÍ]CIO|ED\.|BAIRRO)\s+(?=[A-ZÀ-Ú])/gi, (m, p1) => /BAIRRO/i.test(p1) ? "" : "§")
+    .replace(/§[^,]*/g, " ")
+    .replace(/\b(LOTES?|LT|BLOCO|BL|CONJUNTO|CONJ|CJ|CASA|LOJA|SALA|APTO?|AP|MOD|ANDAR|PARTE|SOBRELOJA|EDIF[IÍ]CIO|ED|NUMERO|N[º°]|NO|KM)(?=[\s.\d,]|$)\.?\s*[\w\/º°-]*/gi, " ")
+    .replace(/\bS\/N\b/gi, " ").replace(/\bCEP\b[:\s]*[\d.-]+/gi, " ").replace(/\b\d+[º°]\s*\w*/g, " ")
+    .replace(/\s*[,;]\s*/g, ", ").replace(/(,\s*)+/g, ", ").replace(/\s+/g, " ").replace(/^[,\s]+|[,\s]+$/g, "").replace(/\s+,/g, ",");
+  const semParenteses = (t) => String(t || "").replace(/\(.*?\)/g, "").trim();
+  // precisão: "endereco" (achou o endereço), "rua" (achou a rua/quadra), "bairro" (só a região)
+  ML.geocodificar = async function (o) {
+    const cidade = String(o.cidade || "").trim(), uf = String(o.uf || "").trim();
+    const contem = (t, sub) => C.semAcento(t).toUpperCase().includes(C.semAcento(sub).toUpperCase());
+    const comCidade = (t) => [t, cidade && !contem(t, cidade) ? cidade : "", uf && !new RegExp("\\b" + uf + "\\b", "i").test(t) ? uf : ""].filter(Boolean).join(", ");
+    const end = String(o.endereco || "").trim();
+    const tent = []; // [consulta, nível]
+    if (end && o.fonte === "obra") tent.push([end, "endereco"]); // endereço da obra pode ser em outra cidade que a do cliente
+    if (end) tent.push([comCidade(end), "endereco"]);
+    const v = await viaCep(o.cep || (/\b\d{2}\.?\d{3}-?\d{3}\b/.exec(end) || [])[0]);
+    if (v && v.logradouro) tent.push([`${v.logradouro}, ${semParenteses(v.bairro)}, ${v.localidade}, ${v.uf}`, "rua"]);
+    if (end) { const sp = simplificar(end); if (sp && sp !== end) { if (o.fonte === "obra") tent.push([sp, "rua"]); tent.push([comCidade(sp), "rua"]); } }
+    // região: bairro do CEP e as últimas partes do endereço (costuma ser o bairro)
+    const regioes = [];
+    if (v && v.bairro) { regioes.push(semParenteses(v.bairro)); const m = /\((.*?)\)/.exec(v.bairro); if (m) regioes.push(m[1]); }
+    const partes = simplificar(end).split(",").map((x) => x.trim()).filter((x) => x.length > 3 && !/^\d+$/.test(x));
+    regioes.push(...partes.slice(-2).reverse());
+    regioes.forEach((r) => tent.push([comCidade(r), "bairro"]));
+    const vistos = new Set();
+    for (const [q, nivel] of tent) {
+      const k = C.semAcento(q).toLowerCase(); if (vistos.has(k)) continue; vistos.add(k);
+      const lista = await nominatim(q);
+      const bons = lista.map((x) => ({ x, t: tipoAchado(x, cidade, uf) })).filter((y) => y.t !== "cidade");
+      const melhor = bons.find((y) => y.t === "lugar") || bons[0];
+      if (!melhor) continue;
+      const precisao = melhor.t === "regiao" ? "bairro" : nivel;
+      return { lat: Math.round(+melhor.x.lat * 1e6) / 1e6, lng: Math.round(+melhor.x.lon * 1e6) / 1e6, precisao, achado: melhor.x.display_name, consulta: q };
+    }
+    return null;
+  };
+  ML.textoPrecisao = (p) => p === "endereco" ? "endereço" : p === "rua" ? "aproximado (rua/quadra)" : p === "bairro" ? "aproximado (bairro/região)" : "marcado à mão";
+  // endereço a usar: o da obra; se não houver, o do cliente
+  function enderecoParaBusca(l) {
+    const loc = l.local || {}, cli = S.cli.get(l.clienteId) || {};
+    if (loc.endereco) return { endereco: loc.endereco, cidade: cli.cidade, uf: cli.uf, fonte: "obra" };
+    if (cli.endereco || cli.cep) return { endereco: cli.endereco || "", cidade: cli.cidade, uf: cli.uf, cep: cli.cep, fonte: "cliente" };
+    return null;
+  }
+  // procura e grava; devolve o resultado (ou null se não achou)
+  ML.localizarLocacao = async function (l, o) {
+    o = o || {};
+    if (!l) return null;
+    const alvo = enderecoParaBusca(l);
+    if (!alvo) { if (!o.silencioso) ML.aviso("Sem endereço da obra nem do cliente para procurar.", "erro"); return null; }
+    if (!o.silencioso) ML.aviso("Procurando o endereço no mapa…");
+    let r = null;
+    try { r = await ML.geocodificar(alvo); } catch (e) { if (!o.silencioso) ML.aviso(ML.msgErro(e), "erro"); return null; }
+    if (!r) { if (!o.silencioso) ML.aviso("Não achei esse endereço. Abra “Definir local” e clique no ponto da obra no mapa.", "erro"); return null; }
+    const local = Object.assign({}, l.local || {}, { lat: r.lat, lng: r.lng, precisao: r.precisao, fonte: alvo.fonte, achado: r.achado });
+    if (!local.endereco && alvo.fonte === "cliente") local.endereco = "";
+    await ML.rpc("fat_salvar_locacao", { p_registro: l.registro, p_dados: { local } });
+    l.local = local;
+    if (!o.silencioso) ML.aviso(r.precisao === "endereco" ? "Marcado no mapa." : `Marcado no mapa — ${ML.textoPrecisao(r.precisao)}. Confira o ponto.`, "ok");
+    return r;
+  };
+  async function localizarTodas(lista) {
+    const fila = lista.filter((x) => !x.temPos && enderecoParaBusca(x.l));
+    if (!fila.length) return ML.aviso("Nenhuma locação sem ponto tem endereço para procurar. Cadastre o endereço da obra ou do cliente.", "erro");
+    const corpo = el(`<div><p style="margin:0 0 10px">Procurando ${fila.length} endereço(s) — leva cerca de ${Math.ceil(fila.length * 2.5)} segundos (o serviço gratuito aceita uma busca por segundo).</p>
+      <div class="medidor"><span data-barra style="width:0%;background:var(--laranja)"></span></div><div data-log class="log-geo"></div></div>`);
+    let parar = false;
+    const m = ML.modal({ titulo: "Localizar automaticamente", corpo, classe: "medio", aoFechar: () => { parar = true; } });
+    let ok = 0, aprox = 0;
+    for (let i = 0; i < fila.length && !parar; i++) {
+      const x = fila[i];
+      let r = null;
+      try { r = await ML.localizarLocacao(x.l, { silencioso: true }); } catch (e) { r = null; }
+      if (r) { ok++; if (r.precisao !== "endereco") aprox++; }
+      $("[data-barra]", corpo).style.width = Math.round((i + 1) / fila.length * 100) + "%";
+      $("[data-log]", corpo).insertAdjacentHTML("beforeend", `<div>${r ? (r.precisao === "endereco" ? "✅" : "🟠") : "❌"} ${esc(x.cli.razaoSocial || "")} <small class="muted">${r ? ML.textoPrecisao(r.precisao) : "não encontrado"}</small></div>`);
+    }
+    $("[data-log]", corpo).insertAdjacentHTML("beforeend", `<p style="margin:10px 0 0"><b>${ok} de ${fila.length} marcados</b>${aprox ? ` · ${aprox} aproximado(s) — vale conferir` : ""}. ${ok < fila.length ? "Os que faltaram: use “Definir local” e clique no ponto da obra." : ""}</p>`);
+    await ML.recarregarERender();
+    if (!parar) setTimeout(() => m.fechar(), 4000);
+  }
+
   // ================================================================ definir o local da obra
   function definirLocal(l) {
     if (!l) return;
@@ -132,19 +248,21 @@
         <button class="btn" data-buscar>${ic("busca")}Buscar</button></div>
       <div data-resultados class="resultados-geo" hidden></div>
       <div class="mapa-modal" data-mapa></div>
-      <small class="muted">Clique no mapa para marcar o ponto exato da obra, ou arraste o marcador. Endereços de Brasília (quadras, conjuntos) nem sempre são achados pela busca — nesse caso, aproxime o mapa e clique no local.</small>
+      <small class="muted" data-geo-info>Clique no mapa para marcar o ponto exato da obra, ou arraste o marcador.</small>
       <div class="erro" data-erro hidden></div></div>`);
-    let mapa = null, mk = null, Lr = null;
-    const marcar = (ll, centrar) => {
+    let mapa = null, mk = null, Lr = null, precisao = loc.precisao || (pos ? "manual" : ""), pendente = null;
+    const marcar = (ll, centrar, prec) => {
       pos = [Math.round(ll[0] * 1e6) / 1e6, Math.round(ll[1] * 1e6) / 1e6];
+      precisao = prec || "manual";
+      if (!mapa) { pendente = centrar; return; }
       if (!mapa) return;
-      if (!mk) { mk = Lr.marker(pos, { draggable: true }).addTo(mapa); mk.on("dragend", () => { const p = mk.getLatLng(); pos = [p.lat, p.lng]; }); }
+      if (!mk) { mk = Lr.marker(pos, { draggable: true }).addTo(mapa); mk.on("dragend", () => { const p = mk.getLatLng(); pos = [p.lat, p.lng]; precisao = "manual"; }); }
       else mk.setLatLng(pos);
       if (centrar) mapa.setView(pos, Math.max(mapa.getZoom(), 16));
     };
     const botoes = [{ texto: "Cancelar" }, { texto: "Salvar local", classe: "primario", acao: async () => {
       if (!pos) { $("[data-erro]", corpo).textContent = "Marque o ponto da obra no mapa (busque o endereço ou clique no mapa)."; $("[data-erro]", corpo).hidden = false; return false; }
-      await ML.rpc("fat_salvar_locacao", { p_registro: l.registro, p_dados: { local: Object.assign({}, loc, { nome: $("[data-nome-local]", corpo).value.trim().toUpperCase(), endereco: $("[data-end]", corpo).value.trim(), lat: pos[0], lng: pos[1] }) } });
+      await ML.rpc("fat_salvar_locacao", { p_registro: l.registro, p_dados: { local: Object.assign({}, loc, { nome: $("[data-nome-local]", corpo).value.trim().toUpperCase(), endereco: $("[data-end]", corpo).value.trim(), lat: pos[0], lng: pos[1], precisao, fonte: "obra" }) } });
       ML.aviso("Local da obra salvo.", "ok"); await ML.recarregarERender();
     } }];
     if (l.local && l.local.lat != null) botoes.unshift({ texto: "Remover do mapa", classe: "perigo", esquerda: true, acao: async () => {
@@ -155,26 +273,26 @@
     ML.carregarLeaflet().then((L) => {
       Lr = L;
       mapa = novoMapa(L, $("[data-mapa]", corpo));
-      mapa.on("click", (e) => marcar([e.latlng.lat, e.latlng.lng], false));
-      if (pos) { marcar(pos, false); mapa.setView(pos, 16); }
+      mapa.on("click", (e) => marcar([e.latlng.lat, e.latlng.lng], false, "manual"));
+      if (pos) { const pr = precisao; marcar(pos, false, pr); mapa.setView(pos, pendente ? 16 : (pr === "bairro" ? 14 : 16)); }
       setTimeout(() => mapa.invalidateSize(), 80);
     });
+    // abriu sem ponto e com endereço: procura sozinho
+    if (!pos && $("[data-end]", corpo).value.trim()) setTimeout(buscar, 150);
     async function buscar() {
-      const q = $("[data-end]", corpo).value.trim(), res = $("[data-resultados]", corpo);
+      const q = $("[data-end]", corpo).value.trim(), res = $("[data-resultados]", corpo), info = $("[data-geo-info]", corpo);
       if (!q) return;
-      res.hidden = false; res.innerHTML = '<div class="muted" style="padding:8px">Buscando…</div>';
+      res.hidden = false; res.innerHTML = '<div class="muted" style="padding:8px">Procurando o endereço…</div>';
       try {
-        const url = "https://nominatim.openstreetmap.org/search?format=json&countrycodes=br&limit=5&accept-language=pt-BR&q=" + encodeURIComponent(q);
-        const r = await fetch(url, { headers: { Accept: "application/json" } });
-        const lista = await r.json();
-        if (!lista.length) { res.innerHTML = '<div class="muted" style="padding:8px">Endereço não encontrado. Tente só bairro e cidade, ou clique direto no mapa.</div>'; return; }
-        res.innerHTML = lista.map((x, i) => `<button data-res="${i}">${ic("mapa")}<span>${esc(x.display_name)}</span></button>`).join("");
-        res.onclick = (e) => {
-          const b = e.target.closest("[data-res]"); if (!b) return;
-          const x = lista[+b.dataset.res];
-          marcar([+x.lat, +x.lon], true); res.hidden = true;
-        };
-        if (lista.length === 1) { marcar([+lista[0].lat, +lista[0].lon], true); res.hidden = true; }
+        const usaCliente = !loc.endereco && q === sugestao;
+        const r = await ML.geocodificar({ endereco: q, cidade: cli.cidade, uf: cli.uf, cep: usaCliente ? cli.cep : "", fonte: usaCliente ? "cliente" : "obra" });
+        if (!corpo.isConnected) return;
+        if (!r) { res.innerHTML = '<div class="muted" style="padding:8px">Não achei esse endereço. Aproxime o mapa e clique no ponto da obra.</div>'; return; }
+        res.hidden = true;
+        marcar([r.lat, r.lng], true, r.precisao);
+        if (mapa && r.precisao === "bairro") mapa.setView(pos, 14);
+        info.innerHTML = r.precisao === "endereco" ? `✅ Achei: <i>${esc(r.achado)}</i>. Se não for o ponto exato, arraste o marcador.`
+          : `🟠 ${r.precisao === "rua" ? "Achei a rua/quadra" : "Achei só o bairro/região"}: <i>${esc(r.achado)}</i>. Arraste o marcador até a obra para ficar exato.`;
       } catch (e) { res.innerHTML = '<div class="muted" style="padding:8px">A busca de endereços não respondeu. Clique direto no mapa para marcar.</div>'; }
     }
     $("[data-buscar]", corpo).addEventListener("click", buscar);

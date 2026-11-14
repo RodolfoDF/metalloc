@@ -650,6 +650,7 @@
         <label class="campo"><span>Situação da locação</span><select name="status"><option value="ativa">Ativa (gera renovações)</option><option value="encerrada" ${l.status === "encerrada" ? "selected" : ""}>Encerrada (equipamento devolvido)</option></select></label></div>
       <label class="campo"><span>Local de operação (onde o equipamento está trabalhando)</span><input name="localNome" list="lista-locais-op2" value="${esc(localNome(l))}" style="text-transform:uppercase" placeholder="ex.: GEALI TAGUATINGA">
         <datalist id="lista-locais-op2">${locaisConhecidos().map((x) => `<option value="${esc(x)}">`).join("")}</datalist></label>
+      <label class="campo"><span>Endereço da obra <small>(o app procura e marca no mapa sozinho)</small></span><input name="enderecoObra" value="${esc((l.local || {}).endereco || "")}" placeholder="rua, número, bairro — ou deixe vazio para usar o endereço do cliente"></label>
       <label class="campo"><span>Prestador de serviços</span><select name="emissorId">${S.emissores.map((e) => `<option value="${esc(e.id)}" ${e.id === l.emissorId ? "selected" : ""}>${esc(e.razaoSocial)}</option>`).join("")}</select></label>
       <label class="campo"><span>Observações internas</span><textarea name="obs">${esc(l.obs || "")}</textarea></label>
       <div class="aviso-linha" style="display:flex;align-items:center;gap:10px">${ic("mapa")}<span style="flex:1">${l.local && l.local.lat != null ? "Local da obra: " + esc(l.local.endereco || "marcado no mapa") : l.local && l.local.endereco ? "Endereço: " + esc(l.local.endereco) + " (sem ponto no mapa)" : "Local da obra ainda não definido"}</span>
@@ -658,9 +659,14 @@
     const mm = modal({ titulo: "Dados da locação", corpo, botoes: [{ texto: "Cancelar" }, { texto: "Salvar", classe: "primario", acao: async () => {
       const v = (n) => $(`[name=${n}]`, corpo).value;
       await rpc("fat_salvar_locacao", { p_registro: l.registro, p_dados: { servico: v("servico"), dataInicio: v("dataInicio"), status: v("status"), emissorId: v("emissorId"), obs: v("obs"),
-        local: Object.assign({}, l.local || {}, { nome: v("localNome").trim().toUpperCase() }) } });
+        local: Object.assign({}, l.local || {}, { nome: v("localNome").trim().toUpperCase(), endereco: v("enderecoObra").trim() }) } });
       aviso("Locação salva.", "ok");
+      const mudouEnd = v("enderecoObra").trim() !== ((l.local || {}).endereco || "");
       await recarregarERender();
+      const atual = S.loc.get(l.registro);
+      if (ML.localizarLocacao && atual && atual.status === "ativa" && (mudouEnd || !(atual.local && atual.local.lat != null))) {
+        ML.localizarLocacao(atual).then((r) => { if (r) render(); });
+      }
     } }] });
   }
 

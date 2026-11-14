@@ -491,6 +491,11 @@
         await ML.recarregarERender();
         const atual = ML.fatura(+nova.registro, +nova.seq);
         if (atual) ML.abrirFatura(atual);
+        // locação nova: procura o endereço da obra (ou do cliente) e marca no mapa em segundo plano
+        const locNova = S.loc.get(+nova.registro);
+        if (modo === "nova" && ML.localizarLocacao && locNova && !(locNova.local && locNova.local.lat != null)) {
+          ML.localizarLocacao(locNova, { silencioso: true }).then((r) => { if (r) ML.aviso(r.precisao === "endereco" ? "Obra marcada no mapa." : `Obra marcada no mapa — ${ML.textoPrecisao(r.precisao)}.`, "ok"); }).catch(() => {});
+        }
       } catch (e) { ML.aviso(ML.msgErro(e), "erro"); }
       finally { bt.disabled = false; }
     }
