@@ -585,15 +585,17 @@
     if (!l) return;
     const cli = S.cli.get(l.clienteId) || {};
     const loc = l.local || {};
-    const sugestao = loc.endereco || [cli.endereco, cli.cidade, cli.uf].filter(Boolean).join(", ");
+    const endCliente = [cli.endereco, cli.cidade, cli.uf].filter(Boolean).join(", ");
+    const sugestao = loc.endereco || "";
     let pos = isFinite(+loc.lat) && loc.lat !== "" && loc.lat != null ? [+loc.lat, +loc.lng] : null;
     const corpo = el(`<div style="display:flex;flex-direction:column;gap:10px">
       <div class="aviso-linha"><b>${esc(cli.razaoSocial || "")}</b> · locação ${esc(C.padReg(l.registro, S.cfg.digitosRegistro))}</div>
-      <label class="campo"><span>Local de operação</span><input data-nome-local list="lista-locais-mapa" value="${esc(loc.nome || "")}" placeholder="ex.: GEALI TAGUATINGA" style="text-transform:uppercase">
-        <datalist id="lista-locais-mapa">${ML.locaisConhecidos().map((x) => `<option value="${esc(x)}">`).join("")}</datalist></label>
       <div style="display:flex;gap:8px;align-items:flex-end">
-        <label class="campo" style="flex:1"><span>Endereço da obra</span><input data-end value="${esc(sugestao)}" placeholder="Rua, número, bairro, cidade"></label>
+        <label class="campo" style="flex:1"><span>Endereço da obra <small>— digite e escolha uma sugestão: o ponto é marcado no mapa sozinho</small></span><input data-end value="${esc(sugestao)}" placeholder="ex.: QNM 34 Conjunto A, Ceilândia  ·  SIA Trecho 3  ·  nome da empresa"></label>
         <button class="btn" data-buscar>${ic("busca")}Buscar</button></div>
+      ${endCliente && !sugestao ? `<small class="muted">Obra no endereço do cliente? <a href="#" data-usar-cli>usar ${esc(endCliente)}</a></small>` : ""}
+      <label class="campo"><span>Nome do local <small>(opcional — aparece na lista e no mapa)</small></span><input data-nome-local list="lista-locais-mapa" value="${esc(loc.nome || "")}" placeholder="ex.: GEALI TAGUATINGA" style="text-transform:uppercase">
+        <datalist id="lista-locais-mapa">${ML.locaisConhecidos().map((x) => `<option value="${esc(x)}">`).join("")}</datalist></label>
       <div data-resultados class="resultados-geo" hidden></div>
       <div class="mapa-modal" data-mapa></div>
       <small class="muted" data-geo-info>Clique no mapa para marcar o ponto exato da obra, ou arraste o marcador.</small>
@@ -609,7 +611,9 @@
       if (centrar) mapa.centrar(pos, precisao === "bairro" ? 14 : Math.max(mapa.zoom(), 16));
     };
     const botoes = [{ texto: "Cancelar" }, { texto: "Salvar local", classe: "primario", acao: async () => {
-      if (!pos) { $("[data-erro]", corpo).textContent = "Marque o ponto da obra no mapa (busque o endereço ou clique no mapa)."; $("[data-erro]", corpo).hidden = false; return false; }
+      // salvou sem marcar: procura o endereço digitado antes de gravar
+      if (!pos && $("[data-end]", corpo).value.trim()) await buscar();
+      if (!pos) { $("[data-erro]", corpo).textContent = "Não achei o ponto. Escolha uma sugestão do endereço ou clique no mapa no lugar da obra."; $("[data-erro]", corpo).hidden = false; return false; }
       const base = Object.assign({}, loc); ["achado", "motor", "placeId", "geoEm"].forEach((k) => delete base[k]);
       await ML.rpc("fat_salvar_locacao", { p_registro: l.registro, p_dados: { local: Object.assign(base, { nome: $("[data-nome-local]", corpo).value.trim().toUpperCase(), endereco: $("[data-end]", corpo).value.trim(), lat: pos[0], lng: pos[1], precisao, fonte: "obra" },
         precisao !== "manual" && extra.motor ? { achado: extra.achado || "", motor: extra.motor, placeId: extra.placeId || "", geoEm: ML.hoje() } : {}) } });
@@ -641,7 +645,7 @@
       if (!q) return;
       res.hidden = false; res.innerHTML = '<div class="muted" style="padding:8px">Procurando o endereço…</div>';
       try {
-        const usaCliente = !loc.endereco && q === sugestao;
+        const usaCliente = !loc.endereco && q === endCliente;
         const r = await ML.geocodificar({ endereco: q, cidade: cli.cidade, uf: cli.uf, cep: usaCliente ? cli.cep : "", fonte: usaCliente ? "cliente" : "obra" });
         if (!corpo.isConnected) return;
         if (!r) { res.innerHTML = '<div class="muted" style="padding:8px">Não achei esse endereço. Aproxime o mapa e clique no ponto da obra.</div>'; return; }
@@ -651,6 +655,10 @@
       } catch (e) { res.innerHTML = '<div class="muted" style="padding:8px">A busca de endereços não respondeu. Clique direto no mapa para marcar.</div>'; }
     }
     $("[data-buscar]", corpo).addEventListener("click", buscar);
+    // digitou e saiu do campo sem escolher sugestão: procura sozinho
+    let ultimaBusca = sugestao;
+    $("[data-end]", corpo).addEventListener("change", (e) => { const v = e.target.value.trim(); if (v && v !== ultimaBusca && !e.target.dataset.lat) { ultimaBusca = v; buscar(); } });
+    corpo.addEventListener("click", (e) => { if (e.target.closest("[data-usar-cli]")) { e.preventDefault(); const i = $("[data-end]", corpo); i.value = endCliente; ultimaBusca = endCliente; e.target.closest("small").remove(); buscar(); } });
     $("[data-end]", corpo).addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); buscar(); } });
   }
   ML.definirLocal = definirLocal;

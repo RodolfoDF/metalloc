@@ -189,9 +189,10 @@
   const locaisConhecidos = () => [...new Set(S.locacoes.map(localNome).filter(Boolean))].sort();
   function chipLocal(l, peq) {
     if (!l) return "";
-    const n = localNome(l);
+    const end = (l.local && l.local.endereco) || "", marcado = l.local && l.local.lat != null;
+    const n = localNome(l) || (end.length > 40 ? end.slice(0, 38) + "…" : end);
     if (l.status !== "ativa") return n ? `<span class="local-chip fixo">${ic("mapa")}${esc(n)}</span>` : "";
-    return `<span class="local-wrap" data-local-wrap="${l.registro}"><button type="button" class="local-chip ${n ? "" : "vazio"} ${peq ? "peq" : ""}" data-local-edit="${l.registro}" title="Alterar o local de operação">${ic("mapa")}${n ? esc(n) : "definir local"}${ic("editar")}</button></span>`;
+    return `<span class="local-wrap" data-local-wrap="${l.registro}"><button type="button" class="local-chip ${n ? "" : "vazio"} ${peq ? "peq" : ""}" data-local-edit="${l.registro}" title="${marcado ? "Marcado no mapa — clique para alterar" : "Definir o endereço da obra e marcar no mapa"}">${ic("mapa")}${n ? esc(n) : "definir local"}${n && !marcado ? " <small>(sem ponto)</small>" : ""}${ic("editar")}</button></span>`;
   }
   function editarLocalInline(reg, wrap) {
     const l = S.loc.get(reg); if (!l || !wrap) return;
@@ -820,7 +821,8 @@
     // edição do local de operação direto na lista (captura: não abre a fatura nem fecha o cartão)
     document.addEventListener("click", (e) => {
       const ed = e.target.closest("[data-local-edit]"), ok = e.target.closest("[data-local-ok]"), x = e.target.closest("[data-local-x]");
-      if (ed) { e.stopPropagation(); e.preventDefault(); return editarLocalInline(+ed.dataset.localEdit, ed.closest("[data-local-wrap]")); }
+      // abre "Local da obra": endereço com sugestões do Google + mapa
+      if (ed) { e.stopPropagation(); e.preventDefault(); return ML.definirLocal ? ML.definirLocal(S.loc.get(+ed.dataset.localEdit)) : editarLocalInline(+ed.dataset.localEdit, ed.closest("[data-local-wrap]")); }
       if (ok) { e.stopPropagation(); e.preventDefault(); return salvarLocalInline(+ok.dataset.localOk, ok.closest("[data-local-wrap]")); }
       if (x) { e.stopPropagation(); e.preventDefault(); return render(); }
       if (e.target.closest(".local-edit")) e.stopPropagation();
