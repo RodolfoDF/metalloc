@@ -690,7 +690,11 @@
   }
 
   // ================================================================ FATURA: detalhe e ações
-  async function pdfDoc(f) { return window.MLPdf.gerar(f); }
+  // faturas antigas (sem o endereço gravado) usam o local atual da locação
+  async function pdfDoc(f) {
+    const l = S.loc.get(f.registro);
+    return window.MLPdf.gerar(f.enderecoOperacao == null && l && ML.textoOperacao ? Object.assign({}, f, { enderecoOperacao: ML.textoOperacao(l.local) }) : f);
+  }
   async function baixarPdf(f) {
     try {
       const doc = await pdfDoc(f);

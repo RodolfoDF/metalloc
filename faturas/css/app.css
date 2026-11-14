@@ -497,3 +497,8 @@ tr.linha-verm td { background: var(--vermelho-fundo); }
 .fe-linha select, .fe-linha input:not([type=checkbox]) { font: inherit; padding: 7px 9px; border: 1px solid var(--borda); border-radius: 8px; background: #fff; min-width: 0; }
 @media (max-width: 720px) { .fe-linha, .cam-linha { grid-template-columns: 1fr 1fr; } }
 .tab small.bl { display: block; }
+.campo-btn { display: flex; gap: 8px; align-items: stretch; }
+.campo-btn input { flex: 1; min-width: 0; }
+.campo-btn .btn { white-space: nowrap; }
+[data-local-st] { color: var(--verde); font-size: 12px; display: inline-flex; align-items: center; gap: 4px; }
+[data-local-st] i { width: 13px; height: 13px; }

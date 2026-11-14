@@ -581,15 +581,19 @@
   }
 
   // ================================================================ definir o local da obra
-  function definirLocal(l) {
+  // opts.aoConfirmar(local): não grava — devolve o local escolhido (nova fatura, locação ainda não existe)
+  // opts.aoSalvar(local): chamado depois de gravar na locação
+  function definirLocal(l, opts) {
     if (!l) return;
+    opts = opts || {};
+    const temp = !!opts.aoConfirmar;
     const cli = S.cli.get(l.clienteId) || {};
     const loc = l.local || {};
     const endCliente = [cli.endereco, cli.cidade, cli.uf].filter(Boolean).join(", ");
     const sugestao = loc.endereco || "";
     let pos = isFinite(+loc.lat) && loc.lat !== "" && loc.lat != null ? [+loc.lat, +loc.lng] : null;
     const corpo = el(`<div style="display:flex;flex-direction:column;gap:10px">
-      <div class="aviso-linha"><b>${esc(cli.razaoSocial || "")}</b> · locação ${esc(C.padReg(l.registro, S.cfg.digitosRegistro))}</div>
+      <div class="aviso-linha"><b>${esc(cli.razaoSocial || (temp ? "Nova locação" : ""))}</b>${l.registro ? ` · locação ${esc(C.padReg(l.registro, S.cfg.digitosRegistro))}` : temp && cli.razaoSocial ? " · nova locação" : ""}</div>
       <div style="display:flex;gap:8px;align-items:flex-end">
         <label class="campo" style="flex:1"><span>Endereço da obra <small>— digite e escolha uma sugestão: o ponto é marcado no mapa sozinho</small></span><input data-end value="${esc(sugestao)}" placeholder="ex.: QNM 34 Conjunto A, Ceilândia  ·  SIA Trecho 3  ·  nome da empresa"></label>
         <button class="btn" data-buscar>${ic("busca")}Buscar</button></div>
@@ -610,16 +614,20 @@
       else mk.mover(pos);
       if (centrar) mapa.centrar(pos, precisao === "bairro" ? 14 : Math.max(mapa.zoom(), 16));
     };
-    const botoes = [{ texto: "Cancelar" }, { texto: "Salvar local", classe: "primario", acao: async () => {
+    const botoes = [{ texto: "Cancelar" }, { texto: temp ? "Usar este local" : "Salvar local", classe: "primario", acao: async () => {
       // salvou sem marcar: procura o endereço digitado antes de gravar
       if (!pos && $("[data-end]", corpo).value.trim()) await buscar();
       if (!pos) { $("[data-erro]", corpo).textContent = "Não achei o ponto. Escolha uma sugestão do endereço ou clique no mapa no lugar da obra."; $("[data-erro]", corpo).hidden = false; return false; }
       const base = Object.assign({}, loc); ["achado", "motor", "placeId", "geoEm"].forEach((k) => delete base[k]);
-      await ML.rpc("fat_salvar_locacao", { p_registro: l.registro, p_dados: { local: Object.assign(base, { nome: $("[data-nome-local]", corpo).value.trim().toUpperCase(), endereco: $("[data-end]", corpo).value.trim(), lat: pos[0], lng: pos[1], precisao, fonte: "obra" },
-        precisao !== "manual" && extra.motor ? { achado: extra.achado || "", motor: extra.motor, placeId: extra.placeId || "", geoEm: ML.hoje() } : {}) } });
-      ML.aviso("Local da obra salvo.", "ok"); await ML.recarregarERender();
+      const novoLocal = Object.assign(base, { nome: $("[data-nome-local]", corpo).value.trim().toUpperCase(), endereco: $("[data-end]", corpo).value.trim(), lat: pos[0], lng: pos[1], precisao, fonte: "obra" },
+        precisao !== "manual" && extra.motor ? { achado: extra.achado || "", motor: extra.motor, placeId: extra.placeId || "", geoEm: ML.hoje() } : {});
+      if (temp) return opts.aoConfirmar(novoLocal);
+      await ML.rpc("fat_salvar_locacao", { p_registro: l.registro, p_dados: { local: novoLocal } });
+      ML.aviso("Local da obra salvo.", "ok");
+      if (opts.aoSalvar) opts.aoSalvar(novoLocal);
+      await ML.recarregarERender();
     } }];
-    if (l.local && l.local.lat != null) botoes.unshift({ texto: "Remover do mapa", classe: "perigo", esquerda: true, acao: async () => {
+    if (!temp && l.local && l.local.lat != null) botoes.unshift({ texto: "Remover do mapa", classe: "perigo", esquerda: true, acao: async () => {
       await ML.rpc("fat_salvar_locacao", { p_registro: l.registro, p_dados: { local: loc.nome ? { nome: loc.nome } : null } });
       ML.aviso("Ponto do mapa removido."); await ML.recarregarERender();
     } });
@@ -662,4 +670,11 @@
     $("[data-end]", corpo).addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); buscar(); } });
   }
   ML.definirLocal = definirLocal;
+  // texto que sai na fatura: "NOME – endereço" (ou só um dos dois)
+  ML.textoOperacao = (local) => {
+    if (!local) return "";
+    const n = String(local.nome || "").trim(), e = String(local.endereco || "").trim().replace(/,\s*Brasil$/i, "");
+    if (n && e && !C.semAcento(e).toUpperCase().includes(C.semAcento(n).toUpperCase())) return `${n} – ${e}`;
+    return e || n;
+  };
 })();

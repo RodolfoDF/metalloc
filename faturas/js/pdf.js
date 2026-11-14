@@ -191,10 +191,15 @@
     const contas = [["Banco", p.banco], ["Agência", p.agencia], ["Conta", p.conta], ["Razão Social", p.titularConta], ["Pix", p.pix]];
     const linhasConta = ["Dados da conta:"].concat(contas.filter((cc) => String(cc[1] || "").trim()).map((cc) => cc[0] + ": " + cc[1]));
     const outras = quebrar(cal, 11, xD - 10.4 - 1.5, f.outrasInfo);
+    // endereço de operação (onde o equipamento está), acima dos dados bancários
+    const endOp = String(f.enderecoOperacao || "").trim();
+    const linhasEnd = endOp ? quebrar(tim, 10.5, xD - xE - 1.5, "Endereço de Operação: " + endOp) : [];
+    const altEnd = linhasEnd.length ? linhasEnd.length * 4.8 + 4.4 : 0;
     let passo = 8.2;
-    const necess = 11.8 + (linhasConta.length - 1) * passo + 5.6 + 5.9 + outras.length * 4.7;
+    const necess = 11.8 + altEnd + (linhasConta.length - 1) * passo + 5.6 + 5.9 + outras.length * 4.7;
     if (y + necess > 270) passo = Math.max(4.6, passo - (y + necess - 270) / linhasConta.length);
-    const yc = y + 11.6;
+    linhasEnd.forEach((l, i) => txt(tim, 10.5, xE, y + 11.6 + i * 4.8, l));
+    const yc = y + 11.6 + altEnd;
     linhasConta.forEach((l, i) => txt(tim, 10.5, xE, yc + i * passo, l));
     const yo = yc + (linhasConta.length - 1) * passo + 5.6;
     txtCentro(cal, 11, (xE + xD) / 2, yo, "OUTRAS INFORMAÇÕES");

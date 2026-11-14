@@ -105,6 +105,7 @@
       const fr = (orig.itens || []).find((i) => i.frete);
       Object.assign(E, { clienteId: loc.clienteId, emissorId: loc.emissorId, dataEmissao: d, periodoIni: per.ini, periodoFim: per.fim, vencimento: C.addDias(d, dias),
         discriminacao: orig.discriminacao || "", outrasInfo: orig.outrasInfo || cfg.textoOutrasInfo || "", obs: orig.obs || "",
+        enderecoOperacao: ML.textoOperacao ? ML.textoOperacao(loc.local) : "",
         itens: copia((orig.itens || []).filter((i) => !i.frete)).map((it) => { if (it.periodo) it.descricao = C.trocarPeriodoDescricao(it.descricao, per.ini, per.fim); return it; }),
         frete: fr ? { incluir: true, descricao: fr.descricao || "FRETE", qtd: fr.qtd || 1, unitario: 0 } : { incluir: false, descricao: "FRETE", qtd: 1, unitario: 0 } });
     } else {
@@ -114,6 +115,7 @@
       Object.assign(E, { clienteId: (orig.tomador || {}).id || loc.clienteId, emissorId: (orig.prestador || {}).id || loc.emissorId, dataEmissao: orig.dataEmissao || d,
         periodoIni: orig.periodoIni || "", periodoFim: orig.periodoFim || "", vencimento: orig.vencimento || "", vencAuto: false,
         discriminacao: orig.discriminacao || "", outrasInfo: orig.outrasInfo || "", obs: orig.obs || "",
+        enderecoOperacao: orig.enderecoOperacao != null ? orig.enderecoOperacao : ML.textoOperacao ? ML.textoOperacao(loc.local) : "",
         itens: copia((orig.itens || []).filter((i) => !i.frete)),
         frete: fr ? { incluir: true, descricao: fr.descricao || "FRETE", qtd: fr.qtd || 1, unitario: fr.unitario || 0 } : { incluir: false, descricao: "FRETE", qtd: 1, unitario: 0 } });
     }
@@ -143,6 +145,10 @@
       if (E.frete.incluir) l.push({ descricao: E.frete.descricao || "FRETE", qtd: +E.frete.qtd || 1, unitario: Math.round(C.numBR(E.frete.unitario) * 100) / 100, frete: true });
       return l;
     };
+    function endOperacao() {
+      if (modo === "nova") return ML.textoOperacao ? ML.textoOperacao({ nome: (E.localNome || "").trim().toUpperCase(), endereco: (E.enderecoObra || "").trim() }) : (E.enderecoObra || "").trim();
+      return String(E.enderecoOperacao || "").trim();
+    }
     function montarFatura() {
       const cli = cliente() || {}, emi = emissor() || {};
       const itens = itensFinais();
@@ -151,7 +157,7 @@
       const tomador = modo === "editar" && !E.atualizarCadastro ? orig.tomador : Object.assign({}, cli, { sigla: siglaPrev() });
       const prestador = modo === "editar" && !E.atualizarCadastro ? orig.prestador : emi;
       return { id: numeroPrev(), sigla: siglaPrev(), registro: registroPrev(), seq: seqPrev(), dataEmissao: E.dataEmissao, periodoIni: E.periodoIni, periodoFim: E.periodoFim,
-        vencimento: E.vencimento, discriminacao: disc, itens, total: C.totalItens(itens), tomador, prestador, outrasInfo: E.outrasInfo,
+        vencimento: E.vencimento, discriminacao: disc, itens, total: C.totalItens(itens), tomador, prestador, outrasInfo: E.outrasInfo, enderecoOperacao: endOperacao(),
         status: modo === "editar" ? orig.status : "emitida", atualizadoEm: C.agoraISO() };
     }
 
@@ -208,9 +214,13 @@
           <label class="campo"><span>Serviço</span><input data-k="servico" data-placeholder-servico></label>
           <label class="campo"><span>Data de implantação</span><input type="date" data-k="dataInicio"><small>a mesma para todos os equipamentos</small></label></div>
         <div class="linha-campos c2">
-          <label class="campo"><span>Local de operação</span><input data-k="localNome" list="lista-locais-ed" placeholder="ex.: GEALI TAGUATINGA" style="text-transform:uppercase"></label>
-          <label class="campo"><span>Endereço da obra (opcional)</span><input data-k="enderecoObra" placeholder="para achar no mapa"></label></div>
-        <datalist id="lista-locais-ed">${ML.locaisConhecidos().map((x) => `<option value="${esc(x)}">`).join("")}</datalist>` : ""}
+          <label class="campo"><span>Local de operação <small>(nome — opcional)</small></span><input data-k="localNome" list="lista-locais-ed" placeholder="ex.: GEALI TAGUATINGA" style="text-transform:uppercase"></label>
+          <div class="campo"><span>Endereço de operação <small>(sai na fatura)</small></span>
+            <div class="campo-btn"><input data-k="enderecoObra" placeholder="digite ou defina no mapa"><button type="button" class="btn" data-acao="def-local">${ic("mapa")}Definir local</button></div>
+            <small data-local-st></small></div></div>
+        <datalist id="lista-locais-ed">${ML.locaisConhecidos().map((x) => `<option value="${esc(x)}">`).join("")}</datalist>` : `
+        <div class="campo"><span>Endereço de operação <small>(sai na fatura, acima dos dados bancários)</small></span>
+          <div class="campo-btn"><input data-k="enderecoOperacao" placeholder="onde o equipamento está trabalhando"><button type="button" class="btn" data-acao="def-local">${ic("mapa")}Definir local</button></div></div>`}
         <label class="campo"><span>Texto da discriminação ${modo === "nova" ? `<a href="#" data-acao="refazer-disc" style="float:right;font-weight:400;color:var(--laranja-esc)">refazer automático</a>` : ""}</span><textarea data-k="discriminacao" rows="2"></textarea></label>
       </section>
       <section class="secao"><h3>Equipamentos <span class="dir muted" data-itens-info></span></h3>
@@ -238,7 +248,7 @@
 
     // ----------------------------- ligação dos campos
     const campo = (k) => $(`[data-k="${k}"]`, ed);
-    for (const k of ["sigla", "regManual", "seqInicial", "emissorId", "dataEmissao", "vencimento", "periodoIni", "periodoFim", "servico", "dataInicio", "discriminacao", "outrasInfo", "obs"]) {
+    for (const k of ["sigla", "regManual", "seqInicial", "emissorId", "dataEmissao", "vencimento", "periodoIni", "periodoFim", "servico", "dataInicio", "discriminacao", "outrasInfo", "obs", "enderecoOperacao"]) {
       const c = campo(k); if (c) c.value = E[k] == null ? "" : E[k];
     }
     if (campo("regAuto")) campo("regAuto").value = E.regAuto ? "1" : "0";
@@ -273,6 +283,7 @@
       } else if (k === "atualizarCadastro") E.atualizarCadastro = t.checked;
       else if (k === "regAuto") E.regAuto = t.value === "1";
       else E[k] = t.value;
+      if (k === "enderecoObra" && E.localEsc) { E.localEsc = null; const st = $("[data-local-st]", ed); if (st) st.textContent = ""; }
       if (k === "discriminacao") E.discAuto = false;
       if (k === "vencimento") E.vencAuto = false;
       if (k === "dataEmissao" && E.vencAuto) { E.vencimento = C.addDias(E.dataEmissao, dias); campo("vencimento").value = E.vencimento; }
@@ -307,6 +318,7 @@
       const a = b.dataset.acao;
       if (a === "fechar") return fechar();
       if (a === "prev") return ed.classList.toggle("ver-prev");
+      if (a === "def-local") return definirLocalEditor();
       if (a === "refazer-disc") { E.discAuto = true; campo("discriminacao").value = discAutomatica(); return atualizar(); }
       if (a === "inserir") return inserirItem();
       if (a === "novo-cliente") {
@@ -461,6 +473,25 @@
       } catch (e) { $("[data-prev-st]", ed).textContent = "prévia indisponível: " + ML.msgErro(e); }
     }
 
+    // ----------------------------- local de operação (mapa)
+    function definirLocalEditor() {
+      if (!ML.definirLocal) return;
+      if (modo === "nova") {
+        const local = Object.assign({}, E.localEsc || {}, { nome: (E.localNome || "").trim().toUpperCase(), endereco: (E.enderecoObra || "").trim() });
+        const r = ML.coordsEscolhidas ? ML.coordsEscolhidas(campo("enderecoObra")) : null;
+        if (r && local.lat == null) Object.assign(local, ML.localDeSugestao(r));
+        return ML.definirLocal({ clienteId: E.clienteId, registro: null, local }, { aoConfirmar: (lc) => {
+          E.localEsc = lc; E.localNome = lc.nome || ""; E.enderecoObra = lc.endereco || "";
+          campo("localNome").value = E.localNome; campo("enderecoObra").value = E.enderecoObra;
+          ["lat", "lng", "place", "prec", "achado"].forEach((k) => delete campo("enderecoObra").dataset[k]);
+          const st = $("[data-local-st]", ed); if (st) st.innerHTML = `${ic("mapa")} marcado no mapa`;
+          sujo = true; atualizar();
+        } });
+      }
+      const l = S.loc.get(orig.registro); if (!l) return;
+      ML.definirLocal(l, { aoSalvar: (lc) => { E.enderecoOperacao = ML.textoOperacao(lc); campo("enderecoOperacao").value = E.enderecoOperacao; sujo = true; atualizar(); } });
+    }
+
     // ----------------------------- salvar
     async function salvar(bt) {
       const f = montarFatura(), itens = f.itens;
@@ -486,7 +517,7 @@
       }
       bt.disabled = true;
       const pf = { dataEmissao: E.dataEmissao, periodoIni: E.periodoIni, periodoFim: E.periodoFim, vencimento: E.vencimento,
-        discriminacao: modo === "nova" && E.discAuto ? discAutomatica() : E.discriminacao, itens, outrasInfo: E.outrasInfo, obs: E.obs };
+        discriminacao: modo === "nova" && E.discAuto ? discAutomatica() : E.discriminacao, itens, outrasInfo: E.outrasInfo, obs: E.obs, enderecoOperacao: endOperacao() };
       try {
         let nova;
         if (modo === "nova") {
@@ -498,8 +529,8 @@
           }
           const r = await ML.rpc("fat_nova_locacao", { p_loc: { clienteId: E.clienteId, emissorId: E.emissorId, registro: E.regAuto ? null : +E.regManual,
             seqInicial: +E.seqInicial || 0, servico: servicoEfetivo(), dataInicio: E.dataInicio, equipamento: equipsTxt(), obs: "",
-            local: (E.enderecoObra || "").trim() || (E.localNome || "").trim() ? Object.assign({ endereco: (E.enderecoObra || "").trim(), nome: (E.localNome || "").trim().toUpperCase() },
-              (() => { const r = ML.coordsEscolhidas ? ML.coordsEscolhidas(campo("enderecoObra")) : null; return r ? ML.localDeSugestao(r) : {}; })()) : null }, p_fat: pf });
+            local: (E.enderecoObra || "").trim() || (E.localNome || "").trim() ? Object.assign({}, E.localEsc || {}, { endereco: (E.enderecoObra || "").trim(), nome: (E.localNome || "").trim().toUpperCase() },
+              (() => { const r = !E.localEsc && ML.coordsEscolhidas ? ML.coordsEscolhidas(campo("enderecoObra")) : null; return r ? ML.localDeSugestao(r) : {}; })()) : null }, p_fat: pf });
           nova = r.fatura;
         } else if (modo === "renovar") {
           nova = await ML.rpc("fat_renovar", { p_registro: orig.registro, p_seq_esperado: orig.seq + 1, p_fat: pf });
