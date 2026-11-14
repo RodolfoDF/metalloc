@@ -159,7 +159,7 @@
     // Resumo por dono
     const ws = wb.addWorksheet("Resumo", { views: [{ showGridLines: false }] });
     const cols = [{ t: "Dono", w: 30 }, { t: "Faturas", w: 9, a: "center" }, { t: "Locação (bruto)", w: 17, f: "R" },
-      { t: "Custo sublocação", w: 17, f: "R" }, { t: `Comissão ${rel.comissaoNome} (${C.pctBR(rel.comPct)}%)`, w: 20, f: "R" },
+      { t: "Custo sublocação", w: 17, f: "R" }, { t: `Comissão do representante (${C.pctBR(rel.comPct)}%)`, w: 20, f: "R" },
       { t: "Líquido locação", w: 17, f: "R" }, { t: "Frete", w: 14, f: "R" }];
     titulo(ws, "Rateio entre donos e comissão", sub, cols.length);
     const h = cabecalho(ws, cols);
@@ -177,7 +177,7 @@
       rt.getCell(2).value = rel.faturas; rt.getCell(2).alignment = { horizontal: "center" };
     }
     ws.addRow([]);
-    const nota = ws.addRow([`Comissão de ${rel.comissaoNome}: ${C.pctBR(rel.comPct)}% sobre a locação de cada dono (frete fora). Na sublocação, sobre a locação menos o custo pago ao parceiro. O frete é dividido em partes iguais entre os donos da fatura.`]);
+    const nota = ws.addRow([`Comissão do representante: ${C.pctBR(rel.comPct)}% sobre a locação de cada dono (frete fora). Na sublocação, sobre a locação menos o custo pago ao parceiro. O frete é dividido em partes iguais entre os donos da fatura.`]);
     ws.mergeCells(nota.number, 1, nota.number, cols.length);
     nota.getCell(1).alignment = { wrapText: true, vertical: "top" }; nota.height = 32;
     nota.getCell(1).font = { size: 9, color: { argb: "FF6B7280" } };
@@ -264,7 +264,54 @@
     return baixar(wb, ctx.arquivo || "Equipamentos.xlsx");
   }
 
-  const API = { faturas, rateio, inventario, COR };
+  // ---------------------------------------------------------------- extrato de comissões
+  const COR_COM = { pago: COR.paga, aberto: COR.aberta, parcial: { fundo: "FFFFF3CD", texto: "FF8A6100" }, credito: COR.vencida };
+  const NOME_COM = { pago: "Pago", aberto: "A pagar", parcial: "Parcial", credito: "Crédito" };
+  async function comissoes(lanc, pags, ctx) {
+    const wb = novoLivro(ctx.ExcelJS);
+    // resumo por dono
+    const ws = wb.addWorksheet("Resumo", { views: [{ showGridLines: false }] });
+    const cr = [{ t: "Dono", w: 30 }, { t: "Lançamentos", w: 12, a: "center" }, { t: "Comissão devida", w: 17, f: "R" }, { t: "Já pago", w: 17, f: "R" }, { t: "Saldo a pagar", w: 17, f: "R" }];
+    titulo(ws, "Comissões do representante", ctx.sub || "", cr.length);
+    const h = cabecalho(ws, cr);
+    const por = new Map();
+    for (const l of lanc) { const a = por.get(l.donoId) || { nome: l.nome, n: 0, d: 0, p: 0, s: 0 }; a.n++; a.d += l.devido; a.p += l.pago; a.s += l.saldo; por.set(l.donoId, a); }
+    for (const a of por.values()) linhaDados(ws, [a.nome, a.n, a.d, a.p, a.s], cr, a.s > 0.004 ? "aberta" : a.s < -0.004 ? "vencida" : "paga");
+    if (por.size) {
+      const ult = ws.lastRow.number, rt = linhaTotal(ws, "Total", cr, h + 1, ult, []);
+      [[2, "d"], [3, "p"], [4, "s"]].forEach(([i, k]) => { const L = ws.getColumn(i + 1).letter, c = rt.getCell(i + 1);
+        c.value = { formula: `SUM(${L}${h + 1}:${L}${ult})`, result: [...por.values()].reduce((x, a) => x + a[k], 0) }; c.numFmt = FMT_R; });
+    }
+    // lançamentos
+    const wl = wb.addWorksheet("Lançamentos", { views: [{ state: "frozen", ySplit: 4, showGridLines: false }] });
+    const cl = [{ t: "Fatura", w: 15, a: "center" }, { t: "Cliente", w: 36, q: 1 }, { t: "Dono", w: 22 }, { t: ctx.regras && ctx.regras.base === "emitida" ? "Emitida em" : "Paga em", w: 12, f: "D" },
+      { t: "Base (locação − custo)", w: 17, f: "R" }, { t: "%", w: 7, a: "center" }, { t: "Comissão", w: 14, f: "R" }, { t: "Já pago", w: 14, f: "R" }, { t: "Saldo", w: 14, f: "R" },
+      { t: "Situação", w: 11, a: "center" }, { t: "Pago em", w: 22 }];
+    titulo(wl, "Lançamentos de comissão", ctx.sub || "", cl.length);
+    const hl = cabecalho(wl, cl);
+    for (const l of lanc) {
+      const r = linhaDados(wl, [l.numero, l.cliente, l.nome, dataXL(l.competencia), l.base, l.pct || "", l.devido, l.pago, l.saldo, NOME_COM[l.status], (l.datasPagamento || []).map(C.dataBR).join(", ")], cl);
+      const k = COR_COM[l.status];
+      if (k) r.eachCell({ includeEmpty: true }, (c) => { c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: k.fundo } }; c.font = { color: { argb: k.texto } }; });
+    }
+    if (lanc.length) {
+      const ult = wl.lastRow.number, rt = linhaTotal(wl, "Total", cl, hl + 1, ult, []);
+      [[6, "devido"], [7, "pago"], [8, "saldo"]].forEach(([i, k]) => { const L = wl.getColumn(i + 1).letter, c = rt.getCell(i + 1);
+        c.value = { formula: `SUM(${L}${hl + 1}:${L}${ult})`, result: lanc.reduce((x, l) => x + l[k], 0) }; c.numFmt = FMT_R; });
+    }
+    wl.autoFilter = { from: { row: hl, column: 1 }, to: { row: hl, column: cl.length } };
+    // pagamentos
+    const wp = wb.addWorksheet("Pagamentos", { views: [{ state: "frozen", ySplit: 4, showGridLines: false }] });
+    const cp = [{ t: "Data", w: 12, f: "D" }, { t: "Dono que pagou", w: 24 }, { t: "Valor", w: 15, f: "R" }, { t: "Forma", w: 16 }, { t: "Faturas", w: 40, q: 1 }, { t: "Obs.", w: 30, q: 1 }, { t: "Registrado por", w: 18 }];
+    titulo(wp, "Pagamentos de comissão", ctx.sub || "", cp.length);
+    const hp = cabecalho(wp, cp);
+    for (const p of pags) linhaDados(wp, [dataXL(p.data), (ctx.nomes || {})[p.dono_id] || p.dono_nome, +p.valor, p.forma, (p.itens || []).map((i) => i.numero).join(", "), p.obs, p.criado_por], cp);
+    if (pags.length) { const ult = wp.lastRow.number, rt = linhaTotal(wp, "Total", cp, hp + 1, ult, []); const c = rt.getCell(3);
+      c.value = { formula: `SUM(C${hp + 1}:C${ult})`, result: pags.reduce((x, p) => x + +p.valor, 0) }; c.numFmt = FMT_R; }
+    return baixar(wb, ctx.arquivo || "Comissoes.xlsx");
+  }
+
+  const API = { faturas, rateio, inventario, comissoes, COR };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   raiz.MLRel = API;
 })(typeof window !== "undefined" ? window : globalThis);

@@ -113,21 +113,21 @@
   ML.TELAS.donos = function (main) {
     const hoje = ML.hoje(), mes = hoje.slice(0, 7);
     const st = S.ui.don || (S.ui.don = { de: mes + "-01", ate: C.addDias(C.addMeses(mes + "-01", 1), -1), base: "faturado" });
-    const com = S.cfg.comissao || { nome: "Rodolfo", pct: 5 };
+    const com = S.cfg.comissao || { nome: "Representante", pct: 5 };
     const rel = C.montarRateio(S.faturas, { de: st.de, ate: st.ate, base: st.base, hoje, nomes: S.nomes, ordemDonos: S.donos.map((d) => d.id), comissaoNome: com.nome, comPct: com.pct });
     const semDono = S.faturas.filter((f) => f.status !== "cancelada" && (f.itens || []).some((i) => !i.frete && !(i.donos || []).length));
     const atalhos = [["Este mês", mes + "-01", C.addDias(C.addMeses(mes + "-01", 1), -1)],
       ["Mês passado", C.addMeses(mes + "-01", -1), C.addDias(mes + "-01", -1)],
       ["Este ano", hoje.slice(0, 4) + "-01-01", hoje.slice(0, 4) + "-12-31"], ["Tudo", "", ""]];
     main.innerHTML = `
-      <div class="pag-cab"><h1>Donos e comissão</h1><button class="btn" data-acao="exportar">${ic("excel")}Exportar rateio</button>
-        <div class="sub">Comissão de ${esc(com.nome)}: ${C.pctBR(com.pct)}% da locação de cada dono (frete fora; na sublocação, sobre locação − custo). Frete dividido em partes iguais entre os donos da fatura.</div></div>
+      <div class="pag-cab"><h1>Donos e rateio</h1><button class="btn" data-acao="exportar">${ic("excel")}Exportar rateio</button>
+        <div class="sub">Comissão do representante: ${C.pctBR(com.pct)}% da locação de cada dono (frete fora; na sublocação, sobre locação − custo). Frete dividido em partes iguais entre os donos da fatura.</div></div>
       <div class="filtros">
         <div class="alternar"><button data-base="faturado" class="${st.base === "faturado" ? "ativo" : ""}">Faturado</button><button data-base="recebido" class="${st.base === "recebido" ? "ativo" : ""}">Recebido</button></div>
         <input type="date" data-f="de" value="${st.de}"><span class="muted">a</span><input type="date" data-f="ate" value="${st.ate}">
         <span class="chips">${atalhos.map(([t, de, ate]) => `<button class="chip ${st.de === de && st.ate === ate ? "ativo" : ""}" data-de="${de}" data-ate="${ate}">${t}</button>`).join("")}</span></div>
       <div class="grade kpis">
-        <div class="cartao kpi destaque" style="cursor:default"><span class="rot">Comissão ${esc(com.nome)}</span>${vg(rel.comissao)}<span class="det">${rel.faturas} faturas · ${rel.base === "recebido" ? "pagas" : "emitidas"} no período</span></div>
+        <div class="cartao kpi destaque" style="cursor:default"><span class="rot">Comissão do representante</span>${vg(rel.comissao)}<span class="det">${rel.faturas} faturas · ${rel.base === "recebido" ? "pagas" : "emitidas"} no período</span></div>
         <div class="cartao kpi" style="cursor:default"><span class="rot">Locação (bruto)</span>${vg(rel.locacao)}<span class="det">sem frete</span></div>
         <div class="cartao kpi" style="cursor:default"><span class="rot">Frete</span>${vg(rel.frete)}<span class="det">dividido entre os donos</span></div>
         <div class="cartao kpi" style="cursor:default"><span class="rot">Custo de sublocação</span>${vg(rel.custo)}<span class="det">pago às empresas parceiras</span></div></div>
@@ -135,7 +135,7 @@
         <h3>${dn.sublocado ? ic("renovar") : ic("usuario")}${esc(dn.nome)}${!dn.donoId ? ' <span class="etq verm">definir</span>' : ""}</h3>
         <div class="linha"><span>Locação</span><b>${C.moeda(dn.bruto)}</b></div>
         ${dn.custo ? `<div class="linha"><span>Custo sublocação</span><b>− ${C.moeda(dn.custo)}</b></div>` : ""}
-        <div class="linha"><span>Comissão ${esc(com.nome)}</span><b>− ${C.moeda(dn.comissao)}</b></div>
+        <div class="linha"><span>Comissão do repr.</span><b>− ${C.moeda(dn.comissao)}</b></div>
         <div class="linha liq"><span>Líquido</span><b>${C.moeda(dn.liquido)}</b></div>
         <div class="linha"><span>Frete</span><b>${C.moeda(dn.frete)}</b></div>
         <div class="linha muted"><span>${dn.faturas} fatura${dn.faturas === 1 ? "" : "s"}</span></div></div>`).join("") || `<div class="cartao vazio">Nenhuma fatura no período.</div>`}</div>
@@ -146,7 +146,7 @@
             <td class="direita num">${l.r.custo ? C.moeda(l.r.custo) : ""}</td><td class="direita num">${C.moeda(l.r.comissao)}</td><td><small>${esc(l.donos || "—")}</small></td></tr>`).join("")}
           </tbody><tfoot><tr><td colspan="4">Total</td><td class="direita num">${C.moeda(rel.locacao)}</td><td class="direita num">${C.moeda(rel.frete)}</td><td class="direita num">${C.moeda(rel.custo)}</td><td class="direita num">${C.moeda(rel.comissao)}</td><td></td></tr></tfoot></table></div>` : `<div class="vazio">Nenhuma fatura no período.</div>`}</div>
       ${rel.parceiros.length ? `<div class="cartao" style="margin-bottom:14px"><div class="cartao-cab"><h2>Sublocações por empresa parceira</h2><span class="muted" style="font-size:12.5px">equipamentos de parceiros alugados para os nossos clientes</span></div>
-        <div class="tabela-wrap"><table class="tab"><thead><tr><th>Parceiro</th><th class="centro">Itens</th><th class="direita">Cobrado do cliente</th><th class="direita">Custo (pagar ao parceiro)</th><th class="direita">Margem</th><th class="direita">Comissão ${esc(com.nome)}</th></tr></thead><tbody>
+        <div class="tabela-wrap"><table class="tab"><thead><tr><th>Parceiro</th><th class="centro">Itens</th><th class="direita">Cobrado do cliente</th><th class="direita">Custo (pagar ao parceiro)</th><th class="direita">Margem</th><th class="direita">Comissão do repr.</th></tr></thead><tbody>
         ${rel.parceiros.map((p) => `<tr><td><b>${esc(p.parceiro)}</b></td><td class="centro">${p.itens}</td><td class="direita num">${C.moeda(p.locacao)}</td><td class="direita num">${C.moeda(p.custo)}</td>
           <td class="direita num"><b>${C.moeda(p.margem)}</b></td><td class="direita num">${C.moeda(p.comissao)}</td></tr>`).join("")}</tbody>
         ${rel.parceiros.length > 1 ? `<tfoot><tr><td>Total</td><td></td><td class="direita num">${C.moeda(rel.parceiros.reduce((a, p) => a + p.locacao, 0))}</td><td class="direita num">${C.moeda(rel.parceiros.reduce((a, p) => a + p.custo, 0))}</td><td class="direita num">${C.moeda(rel.parceiros.reduce((a, p) => a + p.margem, 0))}</td><td class="direita num">${C.moeda(rel.parceiros.reduce((a, p) => a + p.comissao, 0))}</td></tr></tfoot>` : ""}</table></div></div>` : ""}
@@ -156,11 +156,9 @@
             <input data-nome value="${esc(dn.nome)}" ${dn.tipo === "sublocado" ? "readonly title=\"Dono especial para equipamentos sublocados de parceiros\"" : ""}>
             <label class="check"><input type="checkbox" data-ativo ${dn.inativo ? "" : "checked"}> ativo</label>
             ${dn.tipo === "sublocado" ? `<span class="etq lar">sublocação</span>` : `<span></span>`}</div>`).join("")}</div>
-          <div style="display:flex;gap:10px;align-items:flex-end;margin-top:14px;flex-wrap:wrap">
-            <label class="campo" style="flex:1"><span>Comissão — nome</span><input data-com-nome value="${esc(com.nome)}"></label>
-            <label class="campo" style="width:110px"><span>Percentual</span><input data-com-pct inputmode="decimal" value="${C.pctBR(com.pct)}"></label>
-            <button class="btn primario" data-acao="salvar-donos">Salvar</button></div>
-          <small class="muted">Mudar o percentual vale para as faturas emitidas a partir de agora.</small></div>
+          <div style="display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap">
+            <small class="muted" style="flex:1">Percentual e regras da comissão ficam em <a href="#/comissoes" style="color:var(--laranja-esc)">Comissões</a>.</small>
+            <button class="btn primario" data-acao="salvar-donos">Salvar donos</button></div></div>
         <div class="cartao"><div class="cartao-cab"><h2>Faturas com item sem dono</h2></div>
           ${semDono.length ? `<div class="tabela-wrap"><table class="tab"><tbody>${semDono.map((f) => `<tr><td class="nfat">${esc(f.id)}</td><td><span class="cli-nome">${esc((f.tomador || {}).razaoSocial)}</span></td>
             <td class="acoes-td"><button class="btn peq" data-def="${f.registro}:${f.seq}">Definir donos</button></td></tr>`).join("")}</tbody></table></div>` : `<div class="vazio">${ic("check")} Todas as faturas têm dono definido.</div>`}</div>
@@ -193,10 +191,7 @@
           });
           const r = await ML.sb.from("fat_donos").upsert(reg);
           if (r.error) throw r.error;
-          const pct = C.numBR($("[data-com-pct]", main).value);
-          if (!(pct >= 0 && pct <= 100)) throw new Error("Percentual de comissão inválido.");
-          await ML.salvarConfig({ comissao: { nome: $("[data-com-nome]", main).value.trim() || "Comissão", pct } });
-          ML.aviso("Donos e comissão salvos.", "ok");
+          ML.aviso("Donos salvos.", "ok");
           await ML.recarregarERender();
         } catch (er) { ML.aviso(ML.msgErro(er), "erro"); }
       }

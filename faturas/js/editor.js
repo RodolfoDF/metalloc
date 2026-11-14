@@ -38,7 +38,7 @@
         ${temSub ? `<div class="linha-campos c2">
           <label class="campo"><span>Empresa parceira (de quem sublocamos)</span><input data-sub="parceiro" list="lista-parceiros" value="${esc(est.subParceiro || "")}"></label>
           <label class="campo"><span>Custo da sublocação (R$)</span><input data-sub="custo" inputmode="decimal" value="${est.subCusto === "" || est.subCusto == null ? "" : C.moeda(C.numBR(est.subCusto), true)}"></label></div>
-          <small class="muted">Comissão de ${esc((S.cfg.comissao || {}).nome || "comissão")} = ${C.pctBR((S.cfg.comissao || {}).pct || 5)}% sobre (valor da locação − custo da sublocação).</small>
+          <small class="muted">Comissão do representante = ${C.pctBR((S.cfg.comissao || {}).pct || 5)}% sobre (valor da locação − custo da sublocação).</small>
           <datalist id="lista-parceiros">${parceirosConhecidos().map((p) => `<option value="${esc(p)}">`).join("")}</datalist>` : ""}`;
     }
     cont.addEventListener("click", (e) => {

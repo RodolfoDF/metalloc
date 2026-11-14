@@ -288,6 +288,7 @@ table.tab { width: 100%; border-collapse: separate; border-spacing: 0; font-size
 .rateio-mini div { display: flex; justify-content: space-between; gap: 10px; padding: 7px 11px; font-size: 13px; border-bottom: 1px solid #f0f0f1; }
 .rateio-mini div:last-child { border-bottom: 0; }
 .rateio-mini small { color: var(--suave); display: block; }
+.com-fatura { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .botoes-col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
 /* ---------- equipamentos */
@@ -352,6 +353,18 @@ table.tab { width: 100%; border-collapse: separate; border-spacing: 0; font-size
 
 .previa-zap { white-space: pre-wrap; font: 13.5px/1.5 Inter, "Segoe UI", sans-serif; background: #e7f6e9; border: 1px solid #c6e8cb; border-radius: 12px; padding: 14px 16px; margin: 0; }
 .dono-chip input { display: none; }
+
+/* ---------- comissões */
+.sit.com-aberto { color: var(--azul); background: var(--azul-fundo); border-color: var(--azul-borda); }
+.sit.com-parcial { color: #8a6100; background: #fff6dc; border-color: #f3dd9a; }
+.sit.com-pago { color: var(--verde); background: var(--verde-fundo); border-color: var(--verde-borda); }
+.sit.com-credito { color: var(--vermelho); background: var(--vermelho-fundo); border-color: var(--vermelho-borda); }
+.tab tr.com-pago td { background: var(--verde-fundo); } .tab tr.com-credito td { background: var(--vermelho-fundo); } .tab tr.com-parcial td { background: #fff8e3; }
+.tab tr.com-pago td:first-child { box-shadow: inset 4px 0 0 #2f9a52; } .tab tr.com-credito td:first-child { box-shadow: inset 4px 0 0 #d64535; }
+.tab tr.com-aberto td:first-child { box-shadow: inset 4px 0 0 #3b7ddd; } .tab tr.com-parcial td:first-child { box-shadow: inset 4px 0 0 #e0a800; }
+.barra-sel { position: sticky; bottom: 14px; display: flex; align-items: center; gap: 10px; background: var(--texto); color: #fff; border-radius: 999px; padding: 8px 8px 8px 18px; box-shadow: var(--sombra-alta); z-index: 5; width: max-content; max-width: 100%; margin: 0 auto; }
+.barra-sel .btn.fantasma { color: #fff; }
+.barra-sel .btn.fantasma:hover { background: rgba(255,255,255,.1); }
 
 /* ---------- donos */
 .cards-donos { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); margin-bottom: 14px; }

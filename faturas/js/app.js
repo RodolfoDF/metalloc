@@ -133,11 +133,12 @@
   }
 
   async function carregar() {
-    const [cfg, emi, donos, cli, locs, fats, ops, conv, eqs, alertas] = await Promise.all(["fat_config", "fat_emissores", "fat_donos", "fat_clientes", "fat_locacoes", "fat_faturas", "fat_operadores", "fat_convites", "fat_equipamentos", "fat_alertas"].map(todos));
+    const [cfg, emi, donos, cli, locs, fats, ops, conv, eqs, alertas, pagCom] = await Promise.all(["fat_config", "fat_emissores", "fat_donos", "fat_clientes", "fat_locacoes", "fat_faturas", "fat_operadores", "fat_convites", "fat_equipamentos", "fat_alertas", "fat_comissao_pagamentos"].map(todos));
     S.convites = conv;
     S.alertas = alertas.sort((a, b) => a.id - b.id);
+    S.pagCom = pagCom.map((p) => Object.assign({}, p, { valor: +p.valor })).sort((a, b) => (b.data || "").localeCompare(a.data || "") || b.id - a.id);
     S.equip = eqs.map((e) => Object.assign({}, e.dados, { id: e.id, tag: e.tag })).sort((a, b) => a.tag.localeCompare(b.tag, "pt-BR", { numeric: true }));
-    S.cfg = Object.assign({ proximoRegistro: 1, digitosRegistro: 4, diasVencimento: 15, avisoDias: 3, textoOutrasInfo: "", comissao: { nome: "Rodolfo", pct: 5 } }, (cfg[0] || {}).dados || {});
+    S.cfg = Object.assign({ proximoRegistro: 1, digitosRegistro: 4, diasVencimento: 15, avisoDias: 3, textoOutrasInfo: "", comissao: { nome: "Representante", pct: 5, base: "paga", inicio: "" } }, (cfg[0] || {}).dados || {});
     S.emissores = emi.sort((a, b) => a.ordem - b.ordem).map((e) => Object.assign({ id: e.id }, e.dados));
     S.donos = donos.sort((a, b) => a.ordem - b.ordem);
     S.clientes = cli.map((c) => Object.assign({ id: c.id, sigla: c.sigla || "" }, c.dados)).sort((a, b) => (a.razaoSocial || "").localeCompare(b.razaoSocial || ""));
@@ -334,6 +335,8 @@
     const r = TELAS[rotaAtual()] ? rotaAtual() : "painel";
     $$(".lateral nav a").forEach((a) => a.classList.toggle("ativo", a.dataset.rota === r));
     $("#lateral").classList.remove("aberta");
+    const nCom = ML.qtdComissoesAbertas ? ML.qtdComissoesAbertas() : 0;
+    $("#nav-comissao").hidden = !nCom; $("#nav-comissao").textContent = nCom;
     const pend = renovacoes(avisoDias()).length;
     $("#nav-renovar").hidden = !pend; $("#nav-renovar").textContent = pend;
     const dt = new Date();
@@ -469,6 +472,7 @@
   // cliques comuns em tabelas de faturas e renovações
   function ligarTabelas(raiz) {
     raiz.addEventListener("click", async (e) => {
+      if (e.target.closest("input, select, label")) return; // caixas de seleção dentro da linha
       const t = e.target.closest("[data-pagar],[data-pdf],[data-renovar],[data-fat]");
       if (!t || !raiz.contains(t)) return;
       e.stopPropagation();
@@ -652,6 +656,7 @@
         <div><div class="muted" style="font-size:12px;margin-bottom:6px">RATEIO ENTRE DONOS · comissão ${C.pctBR(r.comPct)}%</div>
           <div class="rateio-mini">${r.partes.map((p) => `<div><span>${esc(p.nome)}${p.parceiros && p.parceiros.length ? `<small>sublocado de ${esc(p.parceiros.join(", "))}</small>` : ""}${p.custo ? `<small>custo ${C.moeda(p.custo)}</small>` : ""}</span>
             <span class="direita num">${C.moeda(p.bruto)}<small>comissão ${C.moeda(p.comissao)}${p.frete ? " · frete " + C.moeda(p.frete) : ""}</small></span></div>`).join("") || '<div class="muted">Sem itens de locação</div>'}</div>
+          ${(() => { const cs = ML.comissaoDaFatura ? ML.comissaoDaFatura(f) : []; return cs.length ? `<div class="com-fatura">${cs.map((l) => `<span class="sit com-${l.status}" title="${esc(l.nome)}">${esc(l.nome.split(" ")[0])}: comissão ${l.status === "pago" ? "paga " + l.datasPagamento.map(C.dataBRc).join(", ") : l.status === "credito" ? "crédito " + C.moeda(-l.saldo) : "a pagar " + C.moeda(l.saldo)}</span>`).join("")}</div>` : ""; })()}
           ${r.semDono ? `<div class="aviso-linha verm" style="margin-top:8px">Há item sem dono definido. Use “Editar” para marcar os donos.</div>` : ""}</div>
         <div class="botoes-col">
           <button class="btn primario" data-a="pdf">${ic("baixar")}Baixar PDF</button>

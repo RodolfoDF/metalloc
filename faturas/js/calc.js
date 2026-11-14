@@ -215,7 +215,54 @@
     return rel;
   }
 
-  const API = { montarRateio, moeda, qtdBR, numBR, pctBR, hoje, parseISO, iso, addDias, addMeses, difDias, dataBR, dataBRc, carimbo, agoraISO,
+  // ------------------------------------------------------------ comissões do representante
+  // Cada dono paga a comissão da sua parte. Lançamento = (fatura, dono).
+  // base "paga": a comissão fica devida quando a fatura é paga (competência = data do pagamento);
+  // base "emitida": devida na emissão (competência = data de emissão). Fatura cancelada não gera comissão.
+  // Pagamentos já feitos e que deixaram de ser devidos (fatura cancelada/reaberta) viram crédito (saldo negativo).
+  function comissoes(faturas, pagamentos, o) {
+    o = o || {};
+    const base = o.base === "emitida" ? "emitida" : "paga", inicio = o.inicio || "";
+    const pagoPor = new Map(); // uid|dono -> {valor, ultimo}
+    for (const p of pagamentos || []) for (const it of p.itens || []) {
+      const k = it.uid + "|" + p.dono_id;
+      const a = pagoPor.get(k) || { c: 0, datas: [] };
+      a.c += cents(it.valor); a.datas.push(p.data); pagoPor.set(k, a);
+    }
+    const out = [], vistos = new Set();
+    for (const f of faturas) {
+      if (!f.uid) continue;
+      const devidaAgora = f.status !== "cancelada" && (base === "emitida" || f.status === "paga");
+      const comp = base === "emitida" ? f.dataEmissao : (f.pagoEm || "");
+      const r = rateio(f, o.nomes);
+      for (const p of r.partes) {
+        if (!p.donoId) continue;
+        const k = f.uid + "|" + p.donoId, pg = pagoPor.get(k);
+        let dev = devidaAgora ? cents(p.comissao) : 0;
+        if (dev && inicio && comp && comp < inicio && !pg) continue; // acertado antes de começar o controle
+        if (!dev && !pg) continue;
+        vistos.add(k);
+        const pago = pg ? pg.c : 0, saldo = dev - pago;
+        out.push({ chave: k, uid: f.uid, registro: f.registro, seq: f.seq, numero: f.id, cliente: (f.tomador || {}).razaoSocial || "",
+          competencia: dev ? comp : "", situacaoFatura: situacao(f, o.hoje), donoId: p.donoId, nome: p.nome, sublocado: p.sublocado,
+          base: reais(cents(p.bruto) - cents(p.custo)), pct: r.comPct, devido: reais(dev), pago: reais(pago), saldo: reais(saldo),
+          datasPagamento: pg ? pg.datas.slice().sort() : [],
+          status: saldo === 0 ? "pago" : saldo < 0 ? "credito" : pago > 0 ? "parcial" : "aberto" });
+      }
+    }
+    // pagamentos de faturas que não existem mais (excluídas): crédito
+    for (const [k, pg] of pagoPor) {
+      if (vistos.has(k)) continue;
+      const [uid, donoId] = k.split("|");
+      const ref = (pagamentos || []).flatMap((p) => (p.itens || []).filter((it) => it.uid === uid && p.dono_id === donoId).map((it) => Object.assign({ dono_nome: p.dono_nome }, it)))[0] || {};
+      out.push({ chave: k, uid, registro: 0, seq: 0, numero: ref.numero || "(excluída)", cliente: ref.cliente || "", competencia: "", situacaoFatura: "cancelada",
+        donoId, nome: (o.nomes && o.nomes[donoId]) || ref.dono_nome || donoId, base: 0, pct: 0, devido: 0, pago: reais(pg.c), saldo: -reais(pg.c),
+        datasPagamento: pg.datas.slice().sort(), status: "credito", excluida: true });
+    }
+    return out.sort((a, b) => (a.competencia || "9").localeCompare(b.competencia || "9") || a.registro - b.registro || a.seq - b.seq || a.nome.localeCompare(b.nome));
+  }
+
+  const API = { comissoes, montarRateio, moeda, qtdBR, numBR, pctBR, hoje, parseISO, iso, addDias, addMeses, difDias, dataBR, dataBRc, carimbo, agoraISO,
     proximoPeriodo, sugerirSigla, limparSigla, semAcento, padReg, numeroFatura, situacao, NOME_SITUACAO, rateio, dividir,
     textoDonos, textoDonosItem, totalItens, ordenarItens, descricaoPeriodo, trocarPeriodoDescricao, ehSub };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
