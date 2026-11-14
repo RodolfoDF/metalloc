@@ -33,6 +33,7 @@
   function popupHtml(x) {
     return `<div class="pop"><b>${esc(x.cli.razaoSocial || "")}</b>
       <small>Locação ${esc(C.padReg(x.l.registro, S.cfg.digitosRegistro))}${x.u ? " · " + esc(x.u.id) : ""}</small>
+      ${x.l.local && x.l.local.nome ? `<div class="pop-local">${ic("mapa")}<b>${esc(x.l.local.nome)}</b></div>` : ""}
       <div class="pop-eq">${x.equips.map((e) => `<span class="etq">${esc(e)}</span>`).join(" ") || '<span class="muted">sem equipamento</span>'}</div>
       ${x.u && x.u.periodoFim ? `<div>Período até <b>${C.dataBR(x.u.periodoFim)}</b> · <span class="pin-txt-${x.estado}">${esc(x.dias != null ? ML.textoDias(x.dias) : "")}</span></div>` : ""}
       ${x.l.local && x.l.local.endereco ? `<small class="muted">${esc(x.l.local.endereco)}</small>` : ""}
@@ -65,7 +66,7 @@
           <div class="mapa-lista">${vis.map((x) => `<div class="ml-item" data-reg="${x.l.registro}">
             <i class="pt-mapa pin-${x.estado}"></i>
             <div class="ml-tx"><b>${x.cli.sigla ? `<span class="sigla">${esc(x.cli.sigla)}</span> ` : ""}${esc(x.cli.razaoSocial || "")}</b>
-              <small>${esc(x.equips.join(" · ") || "sem equipamento")}</small>
+              <small>${x.l.local && x.l.local.nome ? esc(x.l.local.nome) + " · " : ""}${esc(x.equips.join(" · ") || "sem equipamento")}</small>
               <small>${x.u && x.u.periodoFim ? "até " + C.dataBRc(x.u.periodoFim) + " · " + esc(ML.textoDias(x.dias)) : ""}</small></div>
             ${x.temPos ? `<button class="ic-btn peq" title="Ver no mapa" data-ir="${x.l.registro}">${ic("alvo")}</button>` : `<button class="btn peq" data-local="${x.l.registro}">${ic("mapa")}Definir local</button>`}
           </div>`).join("") || '<div class="vazio">Nada aqui.</div>'}</div></div>
@@ -124,6 +125,8 @@
     let pos = isFinite(+loc.lat) && loc.lat !== "" && loc.lat != null ? [+loc.lat, +loc.lng] : null;
     const corpo = el(`<div style="display:flex;flex-direction:column;gap:10px">
       <div class="aviso-linha"><b>${esc(cli.razaoSocial || "")}</b> · locação ${esc(C.padReg(l.registro, S.cfg.digitosRegistro))}</div>
+      <label class="campo"><span>Local de operação</span><input data-nome-local list="lista-locais-mapa" value="${esc(loc.nome || "")}" placeholder="ex.: GEALI TAGUATINGA" style="text-transform:uppercase">
+        <datalist id="lista-locais-mapa">${ML.locaisConhecidos().map((x) => `<option value="${esc(x)}">`).join("")}</datalist></label>
       <div style="display:flex;gap:8px;align-items:flex-end">
         <label class="campo" style="flex:1"><span>Endereço da obra</span><input data-end value="${esc(sugestao)}" placeholder="Rua, número, bairro, cidade"></label>
         <button class="btn" data-buscar>${ic("busca")}Buscar</button></div>
@@ -141,12 +144,12 @@
     };
     const botoes = [{ texto: "Cancelar" }, { texto: "Salvar local", classe: "primario", acao: async () => {
       if (!pos) { $("[data-erro]", corpo).textContent = "Marque o ponto da obra no mapa (busque o endereço ou clique no mapa)."; $("[data-erro]", corpo).hidden = false; return false; }
-      await ML.rpc("fat_salvar_locacao", { p_registro: l.registro, p_dados: { local: { endereco: $("[data-end]", corpo).value.trim(), lat: pos[0], lng: pos[1] } } });
+      await ML.rpc("fat_salvar_locacao", { p_registro: l.registro, p_dados: { local: Object.assign({}, loc, { nome: $("[data-nome-local]", corpo).value.trim().toUpperCase(), endereco: $("[data-end]", corpo).value.trim(), lat: pos[0], lng: pos[1] }) } });
       ML.aviso("Local da obra salvo.", "ok"); await ML.recarregarERender();
     } }];
-    if (l.local) botoes.unshift({ texto: "Remover local", classe: "perigo", esquerda: true, acao: async () => {
-      await ML.rpc("fat_salvar_locacao", { p_registro: l.registro, p_dados: { local: null } });
-      ML.aviso("Local removido."); await ML.recarregarERender();
+    if (l.local && l.local.lat != null) botoes.unshift({ texto: "Remover do mapa", classe: "perigo", esquerda: true, acao: async () => {
+      await ML.rpc("fat_salvar_locacao", { p_registro: l.registro, p_dados: { local: loc.nome ? { nome: loc.nome } : null } });
+      ML.aviso("Ponto do mapa removido."); await ML.recarregarERender();
     } });
     ML.modal({ titulo: "Local da obra", corpo, classe: "medio", botoes });
     ML.carregarLeaflet().then((L) => {

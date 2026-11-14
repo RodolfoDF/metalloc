@@ -183,6 +183,37 @@
     await carregarScript("vendor/leaflet/leaflet.js");
     return window.L;
   }
+  // local de operação (onde o equipamento está trabalhando) — fica na locação
+  const localNome = (l) => (l && l.local && l.local.nome) || "";
+  const localDaFatura = (f) => localNome(S.loc.get(f.registro));
+  const locaisConhecidos = () => [...new Set(S.locacoes.map(localNome).filter(Boolean))].sort();
+  function chipLocal(l, peq) {
+    if (!l) return "";
+    const n = localNome(l);
+    if (l.status !== "ativa") return n ? `<span class="local-chip fixo">${ic("mapa")}${esc(n)}</span>` : "";
+    return `<span class="local-wrap" data-local-wrap="${l.registro}"><button type="button" class="local-chip ${n ? "" : "vazio"} ${peq ? "peq" : ""}" data-local-edit="${l.registro}" title="Alterar o local de operação">${ic("mapa")}${n ? esc(n) : "definir local"}${ic("editar")}</button></span>`;
+  }
+  function editarLocalInline(reg, wrap) {
+    const l = S.loc.get(reg); if (!l || !wrap) return;
+    wrap.innerHTML = `<span class="local-edit"><input list="lista-locais-op" value="${esc(localNome(l))}" placeholder="ex.: GEALI TAGUATINGA" maxlength="60">
+      <button type="button" class="ic-btn peq" data-local-ok="${reg}" title="Salvar">${ic("check")}</button><button type="button" class="ic-btn peq" data-local-x title="Cancelar">${ic("x")}</button></span>
+      <datalist id="lista-locais-op">${locaisConhecidos().map((x) => `<option value="${esc(x)}">`).join("")}</datalist>`;
+    const inp = $("input", wrap); inp.focus(); inp.select();
+    inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); salvarLocalInline(reg, wrap); } if (e.key === "Escape") { e.stopPropagation(); render(); } });
+  }
+  async function salvarLocalInline(reg, wrap) {
+    const l = S.loc.get(reg), inp = $("input", wrap); if (!l || !inp) return;
+    const nome = inp.value.trim().toUpperCase();
+    if (nome === localNome(l)) return render();
+    inp.disabled = true;
+    try {
+      const local = Object.assign({}, l.local || {}, { nome });
+      await rpc("fat_salvar_locacao", { p_registro: reg, p_dados: { local } });
+      l.local = local;
+      aviso(nome ? `Local de operação: ${nome}` : "Local de operação removido.", "ok");
+    } catch (e) { aviso(msgErro(e), "erro"); }
+    render();
+  }
   const ultimaFatura = (reg) => { const l = S.fatsDe.get(reg) || []; return l[l.length - 1] || null; };
   const fatura = (reg, seq) => (S.fatsDe.get(reg) || []).find((f) => f.seq === seq) || null;
   const nomeCliente = (id) => { const c = S.cli.get(id); return c ? c.razaoSocial : "(cliente removido)"; };
@@ -454,7 +485,7 @@
         <td><span class="cli-nome" style="max-width:210px">${esc((f.tomador || {}).razaoSocial)}</span></td><td class="direita num nowrap">${C.moeda(f.total)}</td><td>${sitBadge(s)}</td></tr>`;
       return `<tr class="${s} clicavel" data-fat="${f.registro}:${f.seq}">
         <td class="nfat">${esc(f.id)}</td>
-        ${o.semCliente ? "" : `<td><span class="cli-nome" title="${esc((f.tomador || {}).razaoSocial)}">${esc((f.tomador || {}).razaoSocial)}</span>${equip ? `<small class="muted">${esc(equip)}</small>` : ""}</td>`}
+        ${o.semCliente ? "" : `<td><span class="cli-nome" title="${esc((f.tomador || {}).razaoSocial)}">${esc((f.tomador || {}).razaoSocial)}</span>${equip ? `<small class="muted">${esc(equip)}</small>` : ""}${(() => { const l = S.loc.get(f.registro), u = ultimaFatura(f.registro); return l && u && u.seq === f.seq ? chipLocal(l, true) : localDaFatura(f) ? `<small class="muted">${ic("mapa")} ${esc(localDaFatura(f))}</small>` : ""; })()}</td>`}
         <td class="nowrap">${C.dataBR(f.dataEmissao)}</td>
         <td class="nowrap">${f.periodoIni ? C.dataBRc(f.periodoIni) + " a " + C.dataBRc(f.periodoFim) : "—"}</td>
         <td class="nowrap">${C.dataBR(f.vencimento)}</td>
@@ -493,11 +524,11 @@
     const busca = C.semAcento(u.busca).toLowerCase().trim();
     const casa = (f) => {
       if (!busca) return true;
-      const t = C.semAcento([f.id, (f.tomador || {}).razaoSocial, (f.tomador || {}).fantasia, (f.tomador || {}).documento, ...(f.itens || []).map((i) => i.equip + " " + i.descricao)].join(" ")).toLowerCase();
+      const t = C.semAcento([f.id, (f.tomador || {}).razaoSocial, (f.tomador || {}).fantasia, (f.tomador || {}).documento, localDaFatura(f), ...(f.itens || []).map((i) => i.equip + " " + i.descricao)].join(" ")).toLowerCase();
       return busca.split(/\s+/).every((p) => t.includes(p));
     };
     const filtraSit = (f) => u.sit === "todas" || C.situacao(f, d) === u.sit;
-    const filtraData = (f) => (!u.de || (f.dataEmissao || "") >= u.de) && (!u.ate || (f.dataEmissao || "") <= u.ate);
+    const filtraData = (f) => (!u.de || (f.dataEmissao || "") >= u.de) && (!u.ate || (f.dataEmissao || "") <= u.ate) && (!u.local || localDaFatura(f) === u.local);
     const base = S.faturas.filter((f) => casa(f) && filtraData(f));
     const cont = { todas: base.length, aberta: 0, vencida: 0, paga: 0, cancelada: 0 };
     base.forEach((f) => { cont[C.situacao(f, d)]++; });
@@ -512,10 +543,11 @@
       <div class="filtros">
         <input class="busca-local" type="search" placeholder="Filtrar por cliente, nº, equipamento…" value="${esc(u.busca)}" data-f="busca">
         <span class="chips">${chipsSit}</span>
+        ${locaisConhecidos().length ? `<select data-f="local"><option value="">Todos os locais</option>${locaisConhecidos().map((x) => `<option ${x === u.local ? "selected" : ""}>${esc(x)}</option>`).join("")}</select>` : ""}
         ${u.modo === "locacao" ? `<select data-f="locStatus"><option value="ativa" ${u.locStatus === "ativa" ? "selected" : ""}>Locações ativas</option><option value="encerrada" ${u.locStatus === "encerrada" ? "selected" : ""}>Encerradas</option><option value="todas" ${u.locStatus === "todas" ? "selected" : ""}>Todas as locações</option></select>
           <button class="chip ${u.especial === "renovar" ? "ativo" : ""}" data-especial="renovar">${ic("renovar")}A renovar<span class="n">${renovacoes(avisoDias()).length}</span></button>` : ""}
         <span class="muted" style="font-size:12.5px">Emissão</span><input type="date" data-f="de" value="${u.de}"><span class="muted">a</span><input type="date" data-f="ate" value="${u.ate}">
-        ${u.busca || u.de || u.ate || u.sit !== "todas" || u.especial ? `<button class="btn peq fantasma" data-acao="limpar">${ic("x")}Limpar</button>` : ""}
+        ${u.busca || u.de || u.ate || u.local || u.sit !== "todas" || u.especial ? `<button class="btn peq fantasma" data-acao="limpar">${ic("x")}Limpar</button>` : ""}
       </div>
       <div id="lista-area"></div>`;
     const area = $("#lista-area", main);
@@ -530,9 +562,10 @@
       for (const l of S.locacoes) {
         if (u.locStatus !== "todas" && l.status !== u.locStatus) continue;
         if (u.especial === "renovar" && !pend.has(l.registro)) continue;
+        if (u.local && localNome(l) !== u.local) continue;
         const fats = (S.fatsDe.get(l.registro) || []);
         const vis = fats.filter((f) => casa(f) && filtraSit(f) && filtraData(f));
-        const nomeOk = !busca || C.semAcento(nomeCliente(l.clienteId) + " " + equipLoc(l) + " " + l.registro).toLowerCase().includes(busca);
+        const nomeOk = !busca || C.semAcento(nomeCliente(l.clienteId) + " " + equipLoc(l) + " " + l.registro + " " + localNome(l)).toLowerCase().includes(busca);
         if (!vis.length && !(nomeOk && u.sit === "todas" && !u.de && !u.ate && fats.length === 0)) continue;
         grupos.push({ l, fats, vis, ult: fats[fats.length - 1], pend: pend.get(l.registro) });
       }
@@ -562,7 +595,7 @@
       }
       const ac = b.dataset.acao;
       if (ac === "nova") return ML.abrirEditor({ modo: "nova" });
-      if (ac === "limpar") { Object.assign(u, { busca: "", de: "", ate: "", sit: "todas", especial: "" }); $("#busca-global").value = ""; return render(); }
+      if (ac === "limpar") { Object.assign(u, { busca: "", de: "", ate: "", sit: "todas", especial: "", local: "" }); $("#busca-global").value = ""; return render(); }
       if (ac === "exportar") {
         const desc = [u.sit !== "todas" ? C.NOME_SITUACAO[u.sit] : "", u.de || u.ate ? `emissão ${u.de ? C.dataBR(u.de) : "…"} a ${u.ate ? C.dataBR(u.ate) : "…"}` : "", u.busca ? `busca “${u.busca}”` : ""].filter(Boolean).join(" · ");
         return exportarFaturas(listaExport, "Faturas de locação" + (desc ? " — " + desc : ""), `Faturas ${hoje()}.xlsx`);
@@ -592,7 +625,8 @@
     return `<div class="loc ${l.status} ${aberto ? "aberto" : ""}">
       <div class="loc-cab" data-loc-abrir="${l.registro}">
         <div class="loc-tit"><b>${cli.sigla ? `<span class="sigla">${esc(cli.sigla)}</span> ` : ""}${esc(nomeCliente(l.clienteId))}</b>
-          <small>Locação ${esc(C.padReg(l.registro, S.cfg.digitosRegistro))} · ${esc(equipLoc(l) || "sem equipamento")} · ${fats.length} fatura${fats.length === 1 ? "" : "s"}${l.status === "encerrada" ? " · encerrada" : ""}</small></div>
+          <small>Locação ${esc(C.padReg(l.registro, S.cfg.digitosRegistro))} · ${esc(equipLoc(l) || "sem equipamento")} · ${fats.length} fatura${fats.length === 1 ? "" : "s"}${l.status === "encerrada" ? " · encerrada" : ""}</small>
+          <div>${chipLocal(l)}</div></div>
         <div class="loc-per">${ult ? `<span>Última: <b class="nfat">${esc(ult.id)}</b> ${sitBadge(C.situacao(ult, d))}</span>
           <span class="muted">${ult.periodoIni ? C.dataBRc(ult.periodoIni) + " a " + C.dataBRc(ult.periodoFim) : ""}
           ${l.status === "ativa" && dias != null ? ` · <span class="etq ${dias < 0 ? "verm" : pend ? "lar" : ""}">${textoDias(dias)}</span>` : ""}</span>` : `<span class="muted">sem faturas</span>`}
@@ -614,6 +648,8 @@
       <div class="linha-campos c2">
         <label class="campo"><span>Data de implantação</span><input type="date" name="dataInicio" value="${esc(l.dataInicio || "")}"></label>
         <label class="campo"><span>Situação da locação</span><select name="status"><option value="ativa">Ativa (gera renovações)</option><option value="encerrada" ${l.status === "encerrada" ? "selected" : ""}>Encerrada (equipamento devolvido)</option></select></label></div>
+      <label class="campo"><span>Local de operação (onde o equipamento está trabalhando)</span><input name="localNome" list="lista-locais-op2" value="${esc(localNome(l))}" style="text-transform:uppercase" placeholder="ex.: GEALI TAGUATINGA">
+        <datalist id="lista-locais-op2">${locaisConhecidos().map((x) => `<option value="${esc(x)}">`).join("")}</datalist></label>
       <label class="campo"><span>Prestador de serviços</span><select name="emissorId">${S.emissores.map((e) => `<option value="${esc(e.id)}" ${e.id === l.emissorId ? "selected" : ""}>${esc(e.razaoSocial)}</option>`).join("")}</select></label>
       <label class="campo"><span>Observações internas</span><textarea name="obs">${esc(l.obs || "")}</textarea></label>
       <div class="aviso-linha" style="display:flex;align-items:center;gap:10px">${ic("mapa")}<span style="flex:1">${l.local && l.local.lat != null ? "Local da obra: " + esc(l.local.endereco || "marcado no mapa") : l.local && l.local.endereco ? "Endereço: " + esc(l.local.endereco) + " (sem ponto no mapa)" : "Local da obra ainda não definido"}</span>
@@ -621,7 +657,8 @@
     corpo.addEventListener("click", (e) => { if (e.target.closest("[data-def-local]") && ML.definirLocal) { mm.fechar(); ML.definirLocal(l); } });
     const mm = modal({ titulo: "Dados da locação", corpo, botoes: [{ texto: "Cancelar" }, { texto: "Salvar", classe: "primario", acao: async () => {
       const v = (n) => $(`[name=${n}]`, corpo).value;
-      await rpc("fat_salvar_locacao", { p_registro: l.registro, p_dados: { servico: v("servico"), dataInicio: v("dataInicio"), status: v("status"), emissorId: v("emissorId"), obs: v("obs") } });
+      await rpc("fat_salvar_locacao", { p_registro: l.registro, p_dados: { servico: v("servico"), dataInicio: v("dataInicio"), status: v("status"), emissorId: v("emissorId"), obs: v("obs"),
+        local: Object.assign({}, l.local || {}, { nome: v("localNome").trim().toUpperCase() }) } });
       aviso("Locação salva.", "ok");
       await recarregarERender();
     } }] });
@@ -756,7 +793,7 @@
     try {
       aviso("Gerando planilha…");
       await carregarScript("vendor/exceljs.min.js");
-      await window.MLRel.faturas(lista, { nomes: S.nomes, titulo, sub: `Gerado em ${C.dataBR(hoje())} por ${S.op.nome || S.user.email} · ${lista.length} faturas`, hoje: hoje(), arquivo });
+      await window.MLRel.faturas(lista, { nomes: S.nomes, local: localDaFatura, titulo, sub: `Gerado em ${C.dataBR(hoje())} por ${S.op.nome || S.user.email} · ${lista.length} faturas`, hoje: hoje(), arquivo });
     } catch (e) { aviso(msgErro(e), "erro"); }
   }
 
@@ -764,6 +801,14 @@
   function iniciar() {
     hidratarIcones(document);
     ligarLogin(); ajustarLogin();
+    // edição do local de operação direto na lista (captura: não abre a fatura nem fecha o cartão)
+    document.addEventListener("click", (e) => {
+      const ed = e.target.closest("[data-local-edit]"), ok = e.target.closest("[data-local-ok]"), x = e.target.closest("[data-local-x]");
+      if (ed) { e.stopPropagation(); e.preventDefault(); return editarLocalInline(+ed.dataset.localEdit, ed.closest("[data-local-wrap]")); }
+      if (ok) { e.stopPropagation(); e.preventDefault(); return salvarLocalInline(+ok.dataset.localOk, ok.closest("[data-local-wrap]")); }
+      if (x) { e.stopPropagation(); e.preventDefault(); return render(); }
+      if (e.target.closest(".local-edit")) e.stopPropagation();
+    }, true);
     window.addEventListener("hashchange", render);
     $("#btn-menu").addEventListener("click", () => $("#lateral").classList.toggle("aberta"));
     $("#btn-atualizar").addEventListener("click", async () => { await recarregarERender(); aviso("Dados atualizados."); });
@@ -796,6 +841,6 @@
   // expõe para os outros arquivos (editor.js, telas.js)
   window.ML = { sb, S, C, $, $$, esc, el, ic, vg, sitBadge, aviso, modal, confirmar, msgErro, rpc, carregar, recarregarERender, render, TELAS,
     hidratarIcones, salvarConfig, ultimaFatura, fatura, nomeCliente, equipLoc, abrirFatura, baixarPdf, exportarFaturas, carregarScript,
-    tabelaFaturas, ligarTabelas, renovacoes, hoje, todos, situacaoEquip, NOME_SIT_EQ, carregarLeaflet, editarLocacao, textoDias, avisoDias, abrirEditor: null };
+    tabelaFaturas, ligarTabelas, renovacoes, localNome, locaisConhecidos, hoje, todos, situacaoEquip, NOME_SIT_EQ, carregarLeaflet, editarLocacao, textoDias, avisoDias, abrirEditor: null };
   document.addEventListener("DOMContentLoaded", () => setTimeout(iniciar, 0));
 })();

@@ -95,7 +95,7 @@
       const per = { ini: d, fim: C.addDias(C.addMeses(d, 1), -1) };
       Object.assign(E, { clienteId: op.clienteId || "", emissorId: cfg.emissorPadraoId || (S.emissores[0] || {}).id || "", sigla: "", regAuto: true, regManual: "", seqInicial: 0,
         servico: "", dataInicio: d, dataEmissao: d, periodoIni: per.ini, periodoFim: per.fim, vencimento: C.addDias(d, dias),
-        discriminacao: "", outrasInfo: cfg.textoOutrasInfo || "", obs: "", enderecoObra: "" });
+        discriminacao: "", outrasInfo: cfg.textoOutrasInfo || "", obs: "", enderecoObra: "", localNome: "" });
       if (E.clienteId) E.sigla = (S.cli.get(E.clienteId) || {}).sigla || C.sugerirSigla((S.cli.get(E.clienteId) || {}).razaoSocial);
     } else if (modo === "renovar") {
       loc = S.loc.get(op.registro); orig = ML.ultimaFatura(op.registro);
@@ -207,7 +207,10 @@
         ${modo === "nova" ? `<div class="linha-campos c2">
           <label class="campo"><span>Serviço</span><input data-k="servico" data-placeholder-servico></label>
           <label class="campo"><span>Data de implantação</span><input type="date" data-k="dataInicio"><small>a mesma para todos os equipamentos</small></label></div>
-        <label class="campo"><span>Endereço da obra (para o mapa — opcional)</span><input data-k="enderecoObra" placeholder="se for diferente do endereço do cliente"></label>` : ""}
+        <div class="linha-campos c2">
+          <label class="campo"><span>Local de operação</span><input data-k="localNome" list="lista-locais-ed" placeholder="ex.: GEALI TAGUATINGA" style="text-transform:uppercase"></label>
+          <label class="campo"><span>Endereço da obra (opcional)</span><input data-k="enderecoObra" placeholder="para achar no mapa"></label></div>
+        <datalist id="lista-locais-ed">${ML.locaisConhecidos().map((x) => `<option value="${esc(x)}">`).join("")}</datalist>` : ""}
         <label class="campo"><span>Texto da discriminação ${modo === "nova" ? `<a href="#" data-acao="refazer-disc" style="float:right;font-weight:400;color:var(--laranja-esc)">refazer automático</a>` : ""}</span><textarea data-k="discriminacao" rows="2"></textarea></label>
       </section>
       <section class="secao"><h3>Equipamentos <span class="dir muted" data-itens-info></span></h3>
@@ -474,7 +477,7 @@
           }
           const r = await ML.rpc("fat_nova_locacao", { p_loc: { clienteId: E.clienteId, emissorId: E.emissorId, registro: E.regAuto ? null : +E.regManual,
             seqInicial: +E.seqInicial || 0, servico: servicoEfetivo(), dataInicio: E.dataInicio, equipamento: equipsTxt(), obs: "",
-            local: (E.enderecoObra || "").trim() ? { endereco: E.enderecoObra.trim() } : null }, p_fat: pf });
+            local: (E.enderecoObra || "").trim() || (E.localNome || "").trim() ? { endereco: (E.enderecoObra || "").trim(), nome: (E.localNome || "").trim().toUpperCase() } : null }, p_fat: pf });
           nova = r.fatura;
         } else if (modo === "renovar") {
           nova = await ML.rpc("fat_renovar", { p_registro: orig.registro, p_seq_esperado: orig.seq + 1, p_fat: pf });

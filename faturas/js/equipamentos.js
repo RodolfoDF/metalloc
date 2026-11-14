@@ -74,7 +74,7 @@
           <b class="ce-tipo">${esc(e.apelido || e.tipo || "—")}</b>
           <small class="muted">${esc(descEq(e) || "sem dados")}</small>
           <div class="ce-donos">${ic(C.ehSub((e.donos || [])[0]) ? "renovar" : "usuario")}<span>${esc(textoDonosEq(e) || "sem dono definido")}</span></div>
-          ${uso ? `<div class="ce-uso"><span class="cli-nome">${esc(ML.nomeCliente(uso.l.clienteId))}</span>
+          ${uso ? `<div class="ce-uso"><span class="cli-nome">${esc(ML.nomeCliente(uso.l.clienteId))}</span>${ML.localNome(uso.l) ? `<small>${ic("mapa")} <b>${esc(ML.localNome(uso.l))}</b></small>` : ""}
             <small>${esc(uso.u.id)} · até ${C.dataBRc(uso.u.periodoFim)}${dias != null ? ` · <span class="${dias < 0 ? "txt-verm" : ""}">${ML.textoDias(dias)}</span>` : ""}</small></div>`
             : e.situacao === "manutencao" && e.obs ? `<div class="ce-uso"><small>${esc(e.obs)}</small></div>` : ""}
         </div>`;
@@ -295,7 +295,7 @@
       const linhas = lista.map((e) => {
         const sit = ML.situacaoEquip(e), uso = S.emUso.get(e.id);
         return { e, sit, nomeSit: ML.NOME_SIT_EQ[sit], donos: textoDonosEq(e), cliente: uso ? ML.nomeCliente(uso.l.clienteId) : "", fatura: uso ? uso.u.id : "",
-          ate: uso ? uso.u.periodoFim : "", local: uso && uso.l.local ? uso.l.local.endereco || "" : "" };
+          ate: uso ? uso.u.periodoFim : "", local: uso && uso.l.local ? [uso.l.local.nome, uso.l.local.endereco].filter(Boolean).join(" — ") : "" };
       });
       await window.MLRel.inventario(linhas, { arquivo: `Equipamentos ${ML.hoje()}.xlsx`, sub: `Gerado em ${C.dataBR(ML.hoje())} · ${lista.length} equipamentos` });
     } catch (er) { ML.aviso(ML.msgErro(er), "erro"); }

@@ -210,6 +210,19 @@ table.tab { width: 100%; border-collapse: separate; border-spacing: 0; font-size
 .etq.verm { color: var(--vermelho); border-color: var(--vermelho-borda); background: var(--vermelho-fundo); }
 .etq.lar { color: var(--laranja-esc); border-color: var(--laranja-borda); background: var(--laranja-claro); }
 
+/* ---------- local de operação */
+.local-chip { display: inline-flex; align-items: center; gap: 5px; margin-top: 4px; border: 1px dashed var(--laranja-borda); background: var(--laranja-claro); color: var(--laranja-esc);
+  border-radius: 999px; padding: 2px 9px 2px 7px; font: 600 12px Inter, sans-serif; cursor: pointer; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.local-chip i[data-ic] { width: 13px; height: 13px; flex: none; }
+.local-chip i[data-ic]:last-child { opacity: 0; width: 11px; transition: opacity .15s; }
+.local-chip:hover i[data-ic]:last-child { opacity: .8; }
+.local-chip.vazio { background: #fff; color: var(--suave); border-color: var(--borda-forte); font-weight: 500; }
+.local-chip.fixo { border-style: solid; background: var(--cinza-fundo); color: var(--suave); cursor: default; }
+.local-chip.peq { font-size: 11.5px; }
+.local-edit { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; }
+.local-edit input { min-height: 30px; padding: 4px 10px; width: 220px; border-radius: 999px; text-transform: uppercase; font-size: 12.5px; }
+.tab td small i[data-ic] { width: 12px; height: 12px; vertical-align: -2px; }
+
 /* ---------- lista por locação */
 .locs { display: flex; flex-direction: column; gap: 10px; }
 .loc { background: #fff; border: 1px solid var(--borda); border-radius: var(--raio); box-shadow: var(--sombra); overflow: hidden; }
@@ -342,6 +355,9 @@ table.tab { width: 100%; border-collapse: separate; border-spacing: 0; font-size
 .legenda-mapa span { display: inline-flex; align-items: center; gap: 6px; }
 .pop { display: flex; flex-direction: column; gap: 5px; font-size: 13px; }
 .pop small { color: var(--suave); }
+.pop-local { display: flex; align-items: center; gap: 5px; color: var(--laranja-esc); }
+.pop-local i { width: 14px; height: 14px; }
+.ce-uso small i[data-ic] { width: 12px; height: 12px; vertical-align: -2px; }
 .pop-eq { display: flex; flex-wrap: wrap; gap: 4px; }
 .pop-acoes { display: flex; gap: 6px; margin-top: 4px; }
 .leaflet-popup-content-wrapper { border-radius: 12px; }
