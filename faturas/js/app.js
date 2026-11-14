@@ -44,6 +44,7 @@
     quadro: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
     lista: '<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>',
     alvo: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
+    caminhao: '<path d="M1 7h12v9H1zM13 10h4l4 3.5V16h-8z"/><circle cx="5.5" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>',
     externo: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>',
   };
   const ic = (n) => `<i data-ic="${n}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONES[n] || ""}</svg></i>`;
@@ -133,7 +134,12 @@
   }
 
   async function carregar() {
-    const [cfg, emi, donos, cli, locs, fats, ops, conv, eqs, alertas, pagCom] = await Promise.all(["fat_config", "fat_emissores", "fat_donos", "fat_clientes", "fat_locacoes", "fat_faturas", "fat_operadores", "fat_convites", "fat_equipamentos", "fat_alertas", "fat_comissao_pagamentos"].map(todos));
+    const [cfg, emi, donos, cli, locs, fats, ops, conv, eqs, alertas, pagCom, transp, fretes, freteOc] = await Promise.all(["fat_config", "fat_emissores", "fat_donos", "fat_clientes", "fat_locacoes", "fat_faturas", "fat_operadores", "fat_convites", "fat_equipamentos", "fat_alertas", "fat_comissao_pagamentos", "fat_transportadores", "fat_fretes", "fat_frete_ocorrencias"]
+      .map((t) => todos(t).catch((e) => { if (/fat_(transportadores|fretes|frete_ocorrencias)/.test(t)) { console.warn(t, e); return []; } throw e; })));
+    S.transp = transp.map((t) => Object.assign({}, t, { id: +t.id, dados: t.dados || {} }));
+    S.fretes = fretes.map((f) => Object.assign({}, f, { id: +f.id, registro: +f.registro, transportador_id: f.transportador_id == null ? null : +f.transportador_id, valor: +f.valor, cobrado: +f.cobrado, outros: +f.outros, excesso: +f.excesso }))
+      .sort((a, b) => (b.data || "").localeCompare(a.data || "") || b.id - a.id);
+    S.freteOc = freteOc.map((o) => Object.assign({}, o, { registro: +o.registro, valor: +o.valor, cobrado: +o.cobrado, total_pago: +o.total_pago, excesso: +o.excesso })).sort((a, b) => String(b.quando).localeCompare(String(a.quando)));
     S.convites = conv;
     S.alertas = alertas.sort((a, b) => a.id - b.id);
     S.pagCom = pagCom.map((p) => Object.assign({}, p, { valor: +p.valor })).sort((a, b) => (b.data || "").localeCompare(a.data || "") || b.id - a.id);
@@ -376,6 +382,8 @@
     $("#lateral").classList.remove("aberta");
     const nCom = ML.qtdComissoesAbertas ? ML.qtdComissoesAbertas() : 0;
     $("#nav-comissao").hidden = !nCom; $("#nav-comissao").textContent = nCom;
+    const nFre = ML.qtdFretesAPagar ? ML.qtdFretesAPagar() : 0;
+    if ($("#nav-frete")) { $("#nav-frete").hidden = !nFre; $("#nav-frete").textContent = nFre; }
     const pend = renovacoes(avisoDias()).length;
     $("#nav-renovar").hidden = !pend; $("#nav-renovar").textContent = pend;
     const dt = new Date();
@@ -634,7 +642,7 @@
       <div class="loc-cab" data-loc-abrir="${l.registro}">
         <div class="loc-tit"><b>${cli.sigla ? `<span class="sigla">${esc(cli.sigla)}</span> ` : ""}${esc(nomeCliente(l.clienteId))}</b>
           <small>Locação ${esc(C.padReg(l.registro, S.cfg.digitosRegistro))} · ${esc(equipLoc(l) || "sem equipamento")} · ${fats.length} fatura${fats.length === 1 ? "" : "s"}${l.status === "encerrada" ? " · encerrada" : ""}</small>
-          <div>${chipLocal(l)}</div></div>
+          <div class="loc-chips">${chipLocal(l)}${ML.chipFrete ? ML.chipFrete(l) : ""}</div></div>
         <div class="loc-per">${ult ? `<span>Última: <b class="nfat">${esc(ult.id)}</b> ${sitBadge(C.situacao(ult, d))}</span>
           <span class="muted">${ult.periodoIni ? C.dataBRc(ult.periodoIni) + " a " + C.dataBRc(ult.periodoFim) : ""}
           ${l.status === "ativa" && dias != null ? ` · <span class="etq ${dias < 0 ? "verm" : pend ? "lar" : ""}">${textoDias(dias)}</span>` : ""}</span>` : `<span class="muted">sem faturas</span>`}

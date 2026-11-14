@@ -371,6 +371,7 @@
           ${fr.incluir ? `<input data-frete="descricao" value="${esc(fr.descricao)}">
           <input data-frete="qtd" inputmode="decimal" value="${esc(C.qtdBR(fr.qtd))}">
           <input data-frete="unitario" inputmode="decimal" value="${esc(C.moeda(C.numBR(fr.unitario), true))}"><span></span>` : ""}
+          ${modo === "nova" && fr.incluir && ML.freteEditor ? ML.freteEditor.html(E) : ""}
         </div>`;
       ML.hidratarIcones(cont);
       $("[data-itens-info]", ed).textContent = E.itens.length ? `${E.itens.length} ${E.itens.length === 1 ? "item" : "itens"} de locação` : "";
@@ -378,10 +379,18 @@
     $("[data-itens]", ed).addEventListener("input", (e) => {
       const t = e.target, box = t.closest("[data-i]");
       sujo = true;
+      // frete de entrega (prestador, caminhão, valor pago)
+      if (t.dataset.fe) {
+        if (t.tagName === "SELECT" || t.type === "checkbox") return; // tratado no "change"
+        ML.freteEditor.evento(E, t);
+        if (t.dataset.fe === "valor") ML.freteEditor.atualizarAlerta(E, cont());
+        return;
+      }
       if (t.dataset.frete) {
         const k = t.dataset.frete;
         E.frete[k] = k === "incluir" ? t.checked : k === "qtd" ? C.numBR(t.value) : t.value;
         if (k === "incluir") desenharItens();
+        else if (ML.freteEditor) ML.freteEditor.atualizarAlerta(E, cont());
         return atualizar();
       }
       if (!box || !t.dataset.campo) return;
@@ -403,7 +412,15 @@
       atualizar();
     });
     $("[data-itens]", ed).addEventListener("change", (e) => { if (e.target.type === "checkbox") e.target.dispatchEvent(new Event("input", { bubbles: true })); });
-    $("[data-itens]", ed).addEventListener("focusout", (e) => { if (e.target.dataset.frete === "unitario") e.target.value = C.moeda(C.numBR(e.target.value), true); });
+    $("[data-itens]", ed).addEventListener("focusout", (e) => {
+      if (e.target.dataset.frete === "unitario" || (e.target.dataset.fe === "valor" && e.target.value.trim())) e.target.value = C.moeda(C.numBR(e.target.value), true);
+    });
+    const cont = () => $("[data-itens]", ed);
+    $("[data-itens]", ed).addEventListener("change", (e) => {
+      const t = e.target; if (!t.dataset.fe || !(t.tagName === "SELECT" || t.type === "checkbox")) return;
+      sujo = true;
+      if (ML.freteEditor.evento(E, t, desenharItens)) desenharItens();
+    });
 
     // ----------------------------- atualização de cabeçalho e prévia
     let tmrPrev, urlPrev = "", geracao = 0;
@@ -460,7 +477,10 @@
       if (!E.itens.length) erros.push("Insira pelo menos um equipamento nos itens.");
       if (itens.some((i) => !String(i.descricao || "").trim())) erros.push("Há item sem descrição.");
       if (!(f.total > 0)) erros.push("O total da fatura está zerado.");
+      if (modo === "nova" && ML.freteEditor) { const ef = ML.freteEditor.validar(E); if (ef) erros.push(ef); }
       if (erros.length) return ML.aviso(erros[0], "erro");
+      if (modo === "nova" && ML.freteEditor && ML.freteEditor.excesso(E) > 0 && (E.ent || {}).tId &&
+        !await ML.confirmar("Frete acima do cobrado", `O valor pago ao prestador fica <b>${C.moeda(ML.freteEditor.excesso(E))}</b> acima do frete cobrado do cliente. Isso fica <b>registrado como ocorrência</b>. Emitir assim mesmo?`, "Emitir e registrar", true)) return;
       if (E.itens.some((i) => !(i.donos || []).length)) {
         if (!await ML.confirmar("Itens sem dono", "Há equipamento sem dono definido — ele fica de fora do rateio entre os donos. Emitir assim mesmo?", "Continuar")) return;
       }
@@ -491,6 +511,14 @@
         fecharDeVez();
         ML.aviso(modo === "editar" ? `Fatura ${nova.id} salva.` : `Fatura ${nova.id} emitida.`, "ok");
         await ML.recarregarERender();
+        // frete de entrega informado na implantação
+        if (modo === "nova" && ML.freteEditor && (E.ent || {}).tId) {
+          try {
+            const exc = await ML.freteEditor.salvar(E, +nova.registro, nova.id);
+            await ML.recarregarERender();
+            ML.aviso(exc > 0 ? `Frete de entrega registrado — ${C.moeda(exc)} acima do cobrado (ocorrência gravada).` : "Frete de entrega registrado.", exc > 0 ? "erro" : "ok");
+          } catch (e) { ML.aviso("A fatura foi emitida, mas o frete de entrega não foi registrado: " + ML.msgErro(e) + " — registre na aba Frete.", "erro"); }
+        }
         const atual = ML.fatura(+nova.registro, +nova.seq);
         if (atual) ML.abrirFatura(atual);
         // locação nova: procura o endereço da obra (ou do cliente) e marca no mapa em segundo plano
