@@ -211,6 +211,13 @@
       await rpc("fat_salvar_locacao", { p_registro: reg, p_dados: { local } });
       l.local = local;
       aviso(nome ? `Local de operação: ${nome}` : "Local de operação removido.", "ok");
+      // sem endereço da obra: usa o nome do local para achar no mapa (não mexe num ponto marcado à mão)
+      const manual = local.lat != null && (!local.precisao || local.precisao === "manual");
+      if (nome && !local.endereco && !manual && ML.localizarLocacao) {
+        render();
+        const r = await ML.localizarLocacao(l, { silencioso: true });
+        aviso(r ? (r.precisao === "endereco" ? `${nome}: marcado no mapa.` : `${nome}: marcado no mapa — ${ML.textoPrecisao(r.precisao)}.`) : `Não achei “${nome}” no mapa. Use Mapa → Definir local para marcar.`, r ? "ok" : "erro");
+      }
     } catch (e) { aviso(msgErro(e), "erro"); }
     render();
   }

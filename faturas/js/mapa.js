@@ -128,7 +128,7 @@
     const falta = 1100 - (Date.now() - ultimaConsulta); // regra do serviço gratuito: 1 consulta por segundo
     if (falta > 0) await esperar(falta);
     ultimaConsulta = Date.now();
-    const r = await fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=br&limit=5&accept-language=pt-BR&q=" + encodeURIComponent(q), { headers: { Accept: "application/json" } });
+    const r = await fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=br&limit=5&accept-language=pt-BR&viewbox=-49.3,-15.1,-47.0,-16.7&bounded=0&q=" + encodeURIComponent(q), { headers: { Accept: "application/json" } });
     if (!r.ok) throw new Error("busca de endereço indisponível (" + r.status + ")");
     return r.json();
   }
@@ -157,31 +157,79 @@
     .replace(/\s*[,;]\s*/g, ", ").replace(/(,\s*)+/g, ", ").replace(/\s+/g, " ").replace(/^[,\s]+|[,\s]+$/g, "").replace(/\s+,/g, ",");
   const semParenteses = (t) => String(t || "").replace(/\(.*?\)/g, "").trim();
   // precisão: "endereco" (achou o endereço), "rua" (achou a rua/quadra), "bairro" (só a região)
+  const ABREV = [[/\bQD\.?\b/gi, "QUADRA"], [/\bST\.?\s+HAB\b\.?/gi, "SETOR HABITACIONAL"], [/\bHAB\.\s/gi, "HABITACIONAL "], [/\bCONJ\.?\b/gi, "CONJUNTO"], [/\bLT\.?\b/gi, "LOTE"], [/\bAV\.?\b/gi, "AVENIDA"], [/´|`/g, "'"]];
+  function normalizar(t) {
+    let s = String(t || "").replace(/\s*\/\s*([A-Z]{2})\b/gi, ", $1"); // "SANTA MARIA/DF" → "SANTA MARIA, DF"
+    for (const [re, por] of ABREV) s = s.replace(re, por);
+    return s.replace(/\s+/g, " ").trim();
+  }
+  // regiões administrativas do DF e cidades do entorno: se aparecerem no texto, servem de último recurso
+  const REGIOES = ["Plano Piloto", "Asa Norte", "Asa Sul", "Noroeste", "Sudoeste", "Octogonal", "Cruzeiro", "Lago Sul", "Lago Norte", "Varjão", "Park Way",
+    "Núcleo Bandeirante", "Candangolândia", "Riacho Fundo II", "Riacho Fundo", "Guará", "SIA", "SCIA", "Estrutural", "Águas Claras", "Arniqueira", "Vicente Pires",
+    "Taguatinga", "Ceilândia", "Sol Nascente", "Pôr do Sol", "Samambaia", "Recanto das Emas", "Gama", "Santa Maria", "São Sebastião", "Jardim Botânico",
+    "Paranoá", "Itapoã", "Sobradinho II", "Sobradinho", "Fercal", "Planaltina", "Brazlândia"].map((n) => [n, "DF"])
+    .concat([["Valparaíso de Goiás", "GO"], ["Valparaíso", "GO"], ["Cidade Ocidental", "GO"], ["Novo Gama", "GO"], ["Luziânia", "GO"], ["Águas Lindas", "GO"],
+      ["Santo Antônio do Descoberto", "GO"], ["Formosa", "GO"], ["Planaltina de Goiás", "GO"], ["Alexânia", "GO"], ["Anápolis", "GO"], ["Goiânia", "GO"]]);
+  // siglas de setores de Brasília → nome que o mapa conhece
+  const SIGLAS = { SCES: "Setor de Clubes Esportivos Sul", SCEN: "Setor de Clubes Esportivos Norte", SHIS: "Lago Sul", SHIN: "Lago Norte", SMDB: "Setor de Mansões Dom Bosco",
+    SMPW: "Park Way", SOF: "Setor de Oficinas", SAAN: "Setor de Armazenagem e Abastecimento Norte", SIG: "Setor de Indústrias Gráficas", SCS: "Setor Comercial Sul",
+    SCN: "Setor Comercial Norte", SBS: "Setor Bancário Sul", SBN: "Setor Bancário Norte", SAUS: "Setor de Autarquias Sul", SAUN: "Setor de Autarquias Norte",
+    SGAN: "Asa Norte", SGAS: "Asa Sul", SQS: "Asa Sul", SQN: "Asa Norte", CLS: "Asa Sul", CLN: "Asa Norte", SHN: "Setor Hoteleiro Norte", SHS: "Setor Hoteleiro Sul",
+    SEPN: "Asa Norte", SEPS: "Asa Sul", SHCS: "Asa Sul", SMAS: "Setor de Múltiplas Atividades Sul", SHTN: "Lago Norte", SMLN: "Lago Norte", SHA: "Arniqueira",
+    ADE: "Águas Claras", SIA: "SIA", SCIA: "SCIA", SRTVS: "Asa Sul", SRTVN: "Asa Norte", SDS: "Setor de Diversões Sul", SDN: "Setor de Diversões Norte",
+    QNM: "Ceilândia", QNN: "Ceilândia", QNO: "Ceilândia", QNP: "Ceilândia", QNQ: "Ceilândia", QNR: "Ceilândia", QNL: "Taguatinga", QNA: "Taguatinga",
+    QNB: "Taguatinga", QNC: "Taguatinga", QND: "Taguatinga", QNE: "Taguatinga", QNF: "Taguatinga", QNG: "Taguatinga", QNH: "Taguatinga", QNJ: "Taguatinga",
+    QSA: "Taguatinga", QSB: "Taguatinga", QSC: "Taguatinga", QSD: "Taguatinga", QSE: "Taguatinga", QSF: "Taguatinga", DAIA: "DAIA Anápolis" };
+  function siglaNoTexto(t) {
+    for (const w of C.semAcento(t).toUpperCase().split(/[^A-Z0-9]+/)) if (SIGLAS[w]) return SIGLAS[w];
+    return null;
+  }
+  const distKm = (a, b) => { const r = Math.PI / 180, x = (b.lon - a.lon) * r * Math.cos((a.lat + b.lat) / 2 * r), y = (b.lat - a.lat) * r; return Math.sqrt(x * x + y * y) * 6371; };
+  function regiaoNoTexto(t) {
+    const u = " " + C.semAcento(t).toUpperCase().replace(/[^A-Z0-9 ]/g, " ") + " ";
+    for (const [n, uf] of REGIOES) if (u.includes(" " + C.semAcento(n).toUpperCase() + " ")) return [n, uf];
+    return null;
+  }
   ML.geocodificar = async function (o) {
+    o = Object.assign({}, o, { endereco: normalizar(o.endereco) });
+    // se o texto já diz a UF (", DF", ", GO"), não mistura com a cidade do cliente
+    const ufTexto = (/,\s*([A-Z]{2})\s*$/i.exec(o.endereco) || [])[1];
+    if (ufTexto) { o.uf = ufTexto.toUpperCase(); o.cidade = ""; }
     const cidade = String(o.cidade || "").trim(), uf = String(o.uf || "").trim();
     const contem = (t, sub) => C.semAcento(t).toUpperCase().includes(C.semAcento(sub).toUpperCase());
     const comCidade = (t) => [t, cidade && !contem(t, cidade) ? cidade : "", uf && !new RegExp("\\b" + uf + "\\b", "i").test(t) ? uf : ""].filter(Boolean).join(", ");
     const end = String(o.endereco || "").trim();
     const tent = []; // [consulta, nível]
-    if (end && o.fonte === "obra") tent.push([end, "endereco"]); // endereço da obra pode ser em outra cidade que a do cliente
+    if (end && o.fonte === "obra" && (ufTexto || regiaoNoTexto(end))) tent.push([end, "endereco"]); // obra pode ser em outra cidade que a do cliente
     if (end) tent.push([comCidade(end), "endereco"]);
     const v = await viaCep(o.cep || (/\b\d{2}\.?\d{3}-?\d{3}\b/.exec(end) || [])[0]);
     if (v && v.logradouro) tent.push([`${v.logradouro}, ${semParenteses(v.bairro)}, ${v.localidade}, ${v.uf}`, "rua"]);
-    if (end) { const sp = simplificar(end); if (sp && sp !== end) { if (o.fonte === "obra") tent.push([sp, "rua"]); tent.push([comCidade(sp), "rua"]); } }
+    if (end) { const sp = simplificar(end); if (sp && sp !== end) { if (o.fonte === "obra" && (ufTexto || regiaoNoTexto(end))) tent.push([sp, "rua"]); tent.push([comCidade(sp), "rua"]); } }
     // região: bairro do CEP e as últimas partes do endereço (costuma ser o bairro)
     const regioes = [];
     if (v && v.bairro) { regioes.push(semParenteses(v.bairro)); const m = /\((.*?)\)/.exec(v.bairro); if (m) regioes.push(m[1]); }
     const partes = simplificar(end).split(",").map((x) => x.trim()).filter((x) => x.length > 3 && !/^\d+$/.test(x));
     regioes.push(...partes.slice(-2).reverse());
     regioes.forEach((r) => tent.push([comCidade(r), "bairro"]));
+    const sg = siglaNoTexto(end);
+    if (sg) tent.push([/Anápolis/.test(sg) ? `${sg}, GO` : `${sg}, Brasília, DF`, "regiao"]);
+    const rg = regiaoNoTexto(end);
+    if (rg) tent.push([`${rg[0]}, ${rg[1]}`, "regiao"]);
     const vistos = new Set();
     for (const [q, nivel] of tent) {
       const k = C.semAcento(q).toLowerCase(); if (vistos.has(k)) continue; vistos.add(k);
       const lista = await nominatim(q);
-      const bons = lista.map((x) => ({ x, t: tipoAchado(x, cidade, uf) })).filter((y) => y.t !== "cidade");
+      const bons = lista.map((x) => ({ x, t: tipoAchado(x, cidade, uf) })).filter((y) => y.t !== "cidade" || nivel === "regiao");
       const melhor = bons.find((y) => y.t === "lugar") || bons[0];
       if (!melhor) continue;
-      const precisao = melhor.t === "regiao" ? "bairro" : nivel;
+      let precisao = melhor.t === "regiao" || nivel === "regiao" ? "bairro" : nivel;
+      // conferências: número da quadra/lote tem que bater; resultado de estrada é aproximado; vários lugares longe entre si = ambíguo
+      const nums = (q.match(/\b\d{2,4}\b/g) || []).filter((n) => !/^(19|20)\d\d$/.test(n));
+      const texto = String(melhor.x.display_name || "") + " " + String(melhor.x.name || "");
+      if (precisao !== "bairro" && nums.length && !nums.some((n) => new RegExp("\\b0*" + (+n) + "\\b").test(texto))) precisao = "bairro";
+      if (precisao === "endereco" && String(melhor.x.category || "") === "highway" && !nums.length) precisao = "rua";
+      const outros = bons.filter((y) => y !== melhor && y.t !== "cidade");
+      if (precisao !== "bairro" && outros.some((y) => distKm({ lat: +melhor.x.lat, lon: +melhor.x.lon }, { lat: +y.x.lat, lon: +y.x.lon }) > 5)) precisao = "bairro";
       return { lat: Math.round(+melhor.x.lat * 1e6) / 1e6, lng: Math.round(+melhor.x.lon * 1e6) / 1e6, precisao, achado: melhor.x.display_name, consulta: q };
     }
     return null;
@@ -191,6 +239,7 @@
   function enderecoParaBusca(l) {
     const loc = l.local || {}, cli = S.cli.get(l.clienteId) || {};
     if (loc.endereco) return { endereco: loc.endereco, cidade: cli.cidade, uf: cli.uf, fonte: "obra" };
+    if (loc.nome) return { endereco: loc.nome, cidade: cli.cidade, uf: cli.uf, fonte: "obra", soLocal: true };
     if (cli.endereco || cli.cep) return { endereco: cli.endereco || "", cidade: cli.cidade, uf: cli.uf, cep: cli.cep, fonte: "cliente" };
     return null;
   }
