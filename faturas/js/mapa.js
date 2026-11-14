@@ -350,6 +350,7 @@
     const temBairro = t.some((x) => /sublocality|neighborhood|administrative_area_level_[345]/.test(x));
     if (!temBairro && t.some((x) => /^(country|administrative_area_level_1|administrative_area_level_2|locality|colloquial_area|postal_code_prefix)$/.test(x)))
       return nivel === "regiao" && !/^Bras[ií]lia\b/.test(r.formatted_address || "") ? "bairro" : null;
+    if (lt !== "ROOFTOP" && t.some((x) => /^sublocality_level_[345]$/.test(x))) return nivel === "regiao" ? "bairro" : "rua"; // quadra / conjunto
     let p = lt === "ROOFTOP" || lt === "RANGE_INTERPOLATED" || t.some((x) => /establishment|point_of_interest|premise|street_address/.test(x)) ? "endereco"
       : t.some((x) => /^(route|intersection|postal_code)$/.test(x)) ? "rua" : "bairro";
     if (r.partial_match && lt !== "ROOFTOP" && p === "endereco") p = "rua";
@@ -389,8 +390,12 @@
     const A = " " + C.semAcento(achado || "").toUpperCase().replace(/[^A-Z0-9 ]/g, " ") + " ";
     const ufQ = (/,\s*([A-Z]{2})\s*$/i.exec(q) || [])[1], ufA = (/ - ([A-Z]{2}),/.exec(achado || "") || [])[1] || (/,\s*([A-Z]{2})\s*\d{5}/.exec(achado || "") || [])[1];
     if (ufQ && ufA && ufQ.toUpperCase() !== ufA) return "nao";
+    // código da quadra (QNM 34, SQS 308, QR 415…) presente no resultado vale mais que o nome da região (os limites das RAs variam)
+    const codigos = (C.semAcento(q).toUpperCase().match(/\b[A-Z]{2,5}\s*\d{1,4}\b/g) || []).filter((c) => !/^(LOTE|LT|CASA|SALA|LOJA|APTO?|BLOCO|BL|KM|ANDAR|N)\s*\d/.test(c))
+      .map((c) => c.replace(/^([A-Z]+)\s*(\d+)$/, "$1 $2"));
+    const temCodigo = codigos.some((c) => A.includes(" " + c.replace(/ 0*(\d+)$/, " $1") + " "));
     const rg = regiaoNoTexto(q);
-    if (rg && !A.includes(" " + C.semAcento(rg[0]).toUpperCase() + " ")) return "nao";
+    if (rg && !temCodigo && !A.includes(" " + C.semAcento(rg[0]).toUpperCase() + " ")) return "nao";
     const nums = (q.match(/\b\d{2,4}\b/g) || []).filter((n) => !/^(19|20)\d\d$/.test(n) && !/^\d{5}/.test(n));
     if (nums.length && !nums.some((n) => new RegExp(" 0*" + (+n) + " ").test(A))) return "aprox";
     return "ok";
