@@ -347,7 +347,7 @@
   // precisão de um resultado do Geocoding; null = amplo demais (cidade inteira, estado…)
   function precisaoGeocode(r, nivel) {
     const t = r.types || [], lt = r.geometry && r.geometry.location_type;
-    const temBairro = t.some((x) => /sublocality|neighborhood/.test(x));
+    const temBairro = t.some((x) => /sublocality|neighborhood|administrative_area_level_[345]/.test(x));
     if (!temBairro && t.some((x) => /^(country|administrative_area_level_1|administrative_area_level_2|locality|colloquial_area|postal_code_prefix)$/.test(x)))
       return nivel === "regiao" && !/^Bras[ií]lia\b/.test(r.formatted_address || "") ? "bairro" : null;
     let p = lt === "ROOFTOP" || lt === "RANGE_INTERPOLATED" || t.some((x) => /establishment|point_of_interest|premise|street_address/.test(x)) ? "endereco"
@@ -379,7 +379,21 @@
     const r = await coordsDaSugestao(preds[0]);
     const longe = distKm({ lat: CENTRO[0], lon: CENTRO[1] }, { lat: r.lat, lon: r.lng }) > 200;
     const citaCidade = (preds[0].text && C.semAcento(preds[0].text.text).toUpperCase().split(/[ ,-]+/).filter((w) => w.length > 3).some((w) => C.semAcento(q).toUpperCase().includes(w)));
-    return longe && !citaCidade ? null : Object.assign(r, { consulta: q });
+    if (longe && !citaCidade) return null;
+    const c = confere(q, r.achado); if (c === "nao") return null;
+    if (c === "aprox" && r.precisao !== "bairro") r.precisao = "bairro";
+    return Object.assign(r, { consulta: q });
+  }
+  // o resultado bate com o que foi digitado? "nao" = outro lugar (outra UF / outra região do DF); "aprox" = número da quadra não confere
+  function confere(q, achado) {
+    const A = " " + C.semAcento(achado || "").toUpperCase().replace(/[^A-Z0-9 ]/g, " ") + " ";
+    const ufQ = (/,\s*([A-Z]{2})\s*$/i.exec(q) || [])[1], ufA = (/ - ([A-Z]{2}),/.exec(achado || "") || [])[1] || (/,\s*([A-Z]{2})\s*\d{5}/.exec(achado || "") || [])[1];
+    if (ufQ && ufA && ufQ.toUpperCase() !== ufA) return "nao";
+    const rg = regiaoNoTexto(q);
+    if (rg && !A.includes(" " + C.semAcento(rg[0]).toUpperCase() + " ")) return "nao";
+    const nums = (q.match(/\b\d{2,4}\b/g) || []).filter((n) => !/^(19|20)\d\d$/.test(n) && !/^\d{5}/.test(n));
+    if (nums.length && !nums.some((n) => new RegExp(" 0*" + (+n) + " ").test(A))) return "aprox";
+    return "ok";
   }
   async function geocodificarGoogle(o) {
     const { Geocoder } = await google.maps.importLibrary("geocoding");
@@ -408,10 +422,13 @@
       let res = [];
       try { res = (await gc.geocode({ address: q, region: "br", bounds: { south: DF_SW.lat, west: DF_SW.lng, north: DF_NE.lat, east: DF_NE.lng }, componentRestrictions: { country: "BR" } })).results || []; }
       catch (e) { if (e && e.code === "ZERO_RESULTS") continue; throw e; }
-      for (const r of res.slice(0, 1)) {
-        const p = precisaoGeocode(r, nivel); if (!p) continue;
+      for (const r of res.slice(0, 3)) {
+        let p = precisaoGeocode(r, nivel); if (!p) continue;
+        const c = confere(q, r.formatted_address); if (c === "nao") continue;
+        if (c === "aprox" && p !== "bairro") p = "bairro";
         const cand = { lat: arred(latDe(r.geometry.location)), lng: arred(lngDe(r.geometry.location)), precisao: p, achado: r.formatted_address, consulta: q, placeId: r.place_id, motor: "google" };
         if (!melhor || ORDEM[p] > ORDEM[melhor.precisao]) melhor = cand;
+        break;
       }
       if (melhor && melhor.precisao === "endereco") return melhor;
       // o texto original não deu endereço exato: tenta como lugar/estabelecimento antes de simplificar
