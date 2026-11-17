@@ -62,6 +62,12 @@
   function limparSigla(s) { return semAcento(s).toUpperCase().replace(/[^A-Z]/g, "").slice(0, 5); }
   function padReg(reg, dig) { const s = String(reg); return s.length >= (dig || 4) ? s : s.padStart(dig || 4, "0"); }
   function numeroFatura(sigla, reg, seq, dig) { return (sigla || "") + padReg(reg, dig) + "-" + seq; }
+  // número pela data de emissão: SIGLA + DDMMAAAA + "-" + n (n livre para o mesmo cliente no mesmo dia)
+  function numeroData(sigla, data, existentes) {
+    const d = String(data || ""), base = String(sigla || "").toUpperCase() + d.slice(8, 10) + d.slice(5, 7) + d.slice(0, 4) + "-";
+    let n = 0; while (existentes && existentes.has(base + n)) n++;
+    return base + n;
+  }
 
   // ------------------------------------------------------------ situação da fatura
   // aberta (azul) · vencida (vermelho) · paga (verde) · cancelada (cinza)
@@ -263,7 +269,7 @@
   }
 
   const API = { comissoes, montarRateio, moeda, qtdBR, numBR, pctBR, hoje, parseISO, iso, addDias, addMeses, difDias, dataBR, dataBRc, carimbo, agoraISO,
-    proximoPeriodo, sugerirSigla, limparSigla, semAcento, padReg, numeroFatura, situacao, NOME_SITUACAO, rateio, dividir,
+    proximoPeriodo, sugerirSigla, limparSigla, semAcento, padReg, numeroFatura, numeroData, situacao, NOME_SITUACAO, rateio, dividir,
     textoDonos, textoDonosItem, totalItens, ordenarItens, descricaoPeriodo, trocarPeriodoDescricao, ehSub };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   raiz.MLCalc = API;

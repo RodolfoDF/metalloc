@@ -790,26 +790,47 @@
 
   function alterarNumero(f) {
     const dig = S.cfg.digitosRegistro;
+    const usados = new Set(S.faturas.filter((x) => x !== f).map((x) => x.id));
+    const lc = S.loc.get(f.registro), siglaF = f.sigla || (f.tomador || {}).sigla || ((lc && S.cli.get(lc.clienteId)) || {}).sigla || "";
+    const sug = C.numeroData(siglaF, f.dataEmissao, usados);
     const corpo = el(`<div style="display:flex;flex-direction:column;gap:12px">
-      <div class="aviso-linha">Número atual: <b>${esc(f.id)}</b>. Use para corrigir um número digitado errado.</div>
-      <div class="linha-campos c2">
-        <label class="campo"><span>Registro (antes do hífen)</span><input type="number" min="1" name="reg" value="${f.registro}"></label>
-        <label class="campo"><span>Período (depois do hífen)</span><input type="number" min="0" name="seq" value="${f.seq}"></label></div>
-      <div data-escopo hidden style="display:flex;flex-direction:column;gap:8px">
-        <label class="check"><input type="radio" name="esc" value="toda" checked> Mudar a locação inteira (todas as ${(S.fatsDe.get(f.registro) || []).length} faturas deste registro)</label>
-        <label class="check"><input type="radio" name="esc" value="so"> Mudar só esta fatura</label></div>
-      <div class="aviso-linha lar" data-prev></div></div>`);
+      <div class="aviso-linha">Número atual: <b>${esc(f.id)}</b></div>
+      <label class="campo"><span>Número da fatura</span><input name="num" maxlength="40" value="${esc(f.id)}" style="text-transform:uppercase">
+        ${sug !== f.id ? `<small>Pela data de emissão (${C.dataBR(f.dataEmissao)}): <a href="#" data-sug>${esc(sug)}</a></small>` : ""}</label>
+      <details class="avancado"><summary>Avançado: mover para outro registro de locação ou período</summary>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
+          <div class="linha-campos c2">
+            <label class="campo"><span>Registro da locação</span><input type="number" min="1" name="reg" value="${f.registro}"></label>
+            <label class="campo"><span>Período (0 = 1º mês)</span><input type="number" min="0" name="seq" value="${f.seq}"></label></div>
+          <div data-escopo hidden style="display:flex;flex-direction:column;gap:8px">
+            <label class="check"><input type="radio" name="esc" value="toda" checked> Mudar a locação inteira (todas as ${(S.fatsDe.get(f.registro) || []).length} faturas deste registro)</label>
+            <label class="check"><input type="radio" name="esc" value="so"> Mudar só esta fatura</label></div>
+          <small class="muted">Faturas com número pela data ou digitado à mão mantêm o número; só mudam de locação/período.</small></div></details>
+      <div class="aviso-linha lar" data-prev hidden></div></div>`);
     const atualizar = () => {
-      const reg = +$("[name=reg]", corpo).value, seq = +$("[name=seq]", corpo).value;
+      const reg = +$("[name=reg]", corpo).value, seq = +$("[name=seq]", corpo).value, num = $("[name=num]", corpo).value.trim().toUpperCase();
       $("[data-escopo]", corpo).hidden = reg === f.registro;
-      $("[data-prev]", corpo).innerHTML = `Novo número: <b>${esc(C.numeroFatura(f.sigla || "", reg || 0, seq || 0, dig))}</b>`;
+      const pv = $("[data-prev]", corpo), rep = num && num !== f.id && usados.has(num);
+      pv.hidden = !rep; if (rep) pv.innerHTML = `Já existe a fatura <b>${esc(num)}</b>.`;
     };
     corpo.addEventListener("input", atualizar); atualizar();
+    corpo.addEventListener("click", (e) => { if (e.target.closest("[data-sug]")) { e.preventDefault(); $("[name=num]", corpo).value = sug; atualizar(); } });
     modal({ titulo: "Alterar número da fatura", corpo, botoes: [{ texto: "Voltar" }, { texto: "Alterar número", classe: "primario", acao: async () => {
-      const reg = +$("[name=reg]", corpo).value, seq = +$("[name=seq]", corpo).value;
-      const toda = reg !== f.registro && $("[name=esc]:checked", corpo).value === "toda";
-      const r = await rpc("fat_alterar_numero", { p_registro: f.registro, p_seq: f.seq, p_novo_reg: reg, p_novo_seq: seq, p_toda: toda });
-      aviso(`Número alterado: ${(r.afetadas || []).join(", ") || r.fatura.id}`, "ok");
+      const reg = +$("[name=reg]", corpo).value, seq = +$("[name=seq]", corpo).value, num = $("[name=num]", corpo).value.trim().toUpperCase();
+      if (!num) throw new Error("Informe o número da fatura.");
+      if (num !== f.id && usados.has(num)) throw new Error(`Já existe a fatura ${num}.`);
+      let alvo = { registro: f.registro, seq: f.seq }, msg = [];
+      if (reg !== f.registro || seq !== f.seq) {
+        const toda = reg !== f.registro && $("[name=esc]:checked", corpo).value === "toda";
+        const r = await rpc("fat_alterar_numero", { p_registro: f.registro, p_seq: f.seq, p_novo_reg: reg, p_novo_seq: seq, p_toda: toda });
+        alvo = { registro: reg, seq }; msg.push("locação/período alterados");
+        if (r && r.fatura && r.fatura.id === num) { aviso(`Fatura ${num}: ${msg.join(", ")}.`, "ok"); return recarregarERender(); }
+      }
+      if (num !== f.id || msg.length) {
+        const d = await rpc("fat_definir_numero", { p_registro: alvo.registro, p_seq: alvo.seq, p_numero: num });
+        msg.unshift("número " + (d && d.id || num));
+      }
+      aviso(msg.length ? `Alterado: ${msg.join(", ")}.` : "Nada foi alterado.", msg.length ? "ok" : undefined);
       await recarregarERender();
     } }] });
   }

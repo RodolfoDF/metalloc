@@ -316,6 +316,10 @@
             <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn primario" data-acao="salvar-emi">Salvar prestador</button></div></div>
           <div class="cartao"><div class="cartao-cab"><h2>Numeração e prazos</h2></div>
             <div class="linha-campos c4">
+              <label class="campo" style="grid-column:1/-1"><span>Número da fatura</span><select data-c="formatoNumero" data-texto>
+                <option value="data" ${cfg.formatoNumero !== "registro" ? "selected" : ""}>Data de emissão — ex.: TEM17112026-0</option>
+                <option value="registro" ${cfg.formatoNumero === "registro" ? "selected" : ""}>Registro da locação — ex.: TEM0002-0 (antigo)</option></select>
+                <small>Sigla do cliente + data de emissão; o número depois do hífen separa faturas do mesmo cliente no mesmo dia. Dá para digitar o número à mão na fatura.</small></label>
               <label class="campo"><span>Próximo registro</span><input type="number" min="1" data-c="proximoRegistro" value="${esc(cfg.proximoRegistro)}"><small>automático</small></label>
               <label class="campo"><span>Dígitos do registro</span><input type="number" min="1" max="8" data-c="digitosRegistro" value="${esc(cfg.digitosRegistro)}"><small>ex.: 4 → 0002</small></label>
               <label class="campo"><span>Dias p/ vencimento</span><input type="number" min="0" data-c="diasVencimento" value="${esc(cfg.diasVencimento)}"><small>após a emissão</small></label>
@@ -394,7 +398,7 @@
         }
         if (t.dataset.acao === "salvar-cfg") {
           const p = {};
-          $$("[data-c]", main).forEach((i) => { p[i.dataset.c] = i.tagName === "TEXTAREA" ? i.value : Math.max(0, parseInt(i.value, 10) || 0); });
+          $$("[data-c]", main).forEach((i) => { p[i.dataset.c] = i.tagName === "TEXTAREA" || i.hasAttribute("data-texto") ? i.value : Math.max(0, parseInt(i.value, 10) || 0); });
           if (p.proximoRegistro < 1) p.proximoRegistro = 1;
           if (p.digitosRegistro < 1) p.digitosRegistro = 4;
           await ML.salvarConfig(p);

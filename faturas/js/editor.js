@@ -93,7 +93,7 @@
 
     if (modo === "nova") {
       const per = { ini: d, fim: C.addDias(C.addMeses(d, 1), -1) };
-      Object.assign(E, { clienteId: op.clienteId || "", emissorId: cfg.emissorPadraoId || (S.emissores[0] || {}).id || "", sigla: "", regAuto: true, regManual: "", seqInicial: 0,
+      Object.assign(E, { clienteId: op.clienteId || "", emissorId: cfg.emissorPadraoId || (S.emissores[0] || {}).id || "", sigla: "", regAuto: true, regManual: "", seqInicial: 0, numAuto: true, numManual: "",
         servico: "", dataInicio: d, dataEmissao: d, periodoIni: per.ini, periodoFim: per.fim, vencimento: C.addDias(d, dias),
         discriminacao: "", outrasInfo: cfg.textoOutrasInfo || "", obs: "", enderecoObra: "", localNome: "" });
       if (E.clienteId) E.sigla = (S.cli.get(E.clienteId) || {}).sigla || C.sugerirSigla((S.cli.get(E.clienteId) || {}).razaoSocial);
@@ -103,7 +103,7 @@
       if (loc.status !== "ativa") return ML.aviso("Esta locação está encerrada. Reative em “Dados da locação” para renovar.", "erro");
       const per = orig.periodoIni && orig.periodoFim ? C.proximoPeriodo(orig.periodoIni, orig.periodoFim) : { ini: d, fim: C.addDias(C.addMeses(d, 1), -1) };
       const fr = (orig.itens || []).find((i) => i.frete);
-      Object.assign(E, { clienteId: loc.clienteId, emissorId: loc.emissorId, dataEmissao: d, periodoIni: per.ini, periodoFim: per.fim, vencimento: C.addDias(d, dias),
+      Object.assign(E, { numAuto: true, numManual: "", clienteId: loc.clienteId, emissorId: loc.emissorId, dataEmissao: d, periodoIni: per.ini, periodoFim: per.fim, vencimento: C.addDias(d, dias),
         discriminacao: orig.discriminacao || "", outrasInfo: orig.outrasInfo || cfg.textoOutrasInfo || "", obs: orig.obs || "",
         enderecoOperacao: ML.textoOperacao ? ML.textoOperacao(loc.local) : "",
         itens: copia((orig.itens || []).filter((i) => !i.frete)).map((it) => { if (it.periodo) it.descricao = C.trocarPeriodoDescricao(it.descricao, per.ini, per.fim); return it; }),
@@ -133,7 +133,11 @@
     const registroPrev = () => modo === "nova" ? (E.regAuto ? proximoLivre() : (+E.regManual || 0)) : orig.registro;
     const seqPrev = () => modo === "nova" ? (+E.seqInicial || 0) : modo === "renovar" ? orig.seq + 1 : orig.seq;
     const siglaPrev = () => modo === "nova" ? C.limparSigla(E.sigla) : modo === "renovar" ? C.limparSigla((cliente() || {}).sigla || "") : (orig.sigla || "");
-    const numeroPrev = () => modo === "editar" ? orig.id : C.numeroFatura(siglaPrev(), registroPrev(), seqPrev(), cfg.digitosRegistro);
+    const numerosUsados = () => new Set(S.faturas.map((f) => f.id));
+    const numeroPrev = () => modo === "editar" ? orig.id : !E.numAuto ? String(E.numManual || "").trim().toUpperCase()
+      : cfg.formatoNumero === "registro" ? C.numeroFatura(siglaPrev(), registroPrev(), seqPrev(), cfg.digitosRegistro)
+      : C.numeroData(siglaPrev(), E.dataEmissao, numerosUsados());
+    const numeroPrevAuto = () => cfg.formatoNumero === "registro" ? C.numeroFatura(siglaPrev(), registroPrev(), seqPrev(), cfg.digitosRegistro) : C.numeroData(siglaPrev(), E.dataEmissao, numerosUsados());
     const equipsTxt = () => [...new Set(E.itens.map((i) => i.equip).filter(Boolean))].join(" + ");
     const servicoEfetivo = () => E.servico.trim() || ("LOCAÇÃO DE " + (equipsTxt() || "EQUIPAMENTO") + " - INSTALAÇÃO").toUpperCase();
     function discAutomatica() {
@@ -175,6 +179,9 @@
     const form = $(".editor-form", ed);
     if (window.matchMedia("(max-width: 1180px)").matches) $(".ver-prev-btn", ed).style.display = "";
 
+    const campoNumero = `
+          <label class="campo"><span>Número da fatura</span><select data-k="numAuto"><option value="1">Automático (${cfg.formatoNumero === "registro" ? "registro" : "data de emissão"})</option><option value="0">Informar manualmente</option></select></label>
+          <label class="campo" data-num-manual hidden><span>Nº da fatura</span><input data-k="numManual" maxlength="40" style="text-transform:uppercase" placeholder="ex.: TEM17112026-0"></label>`;
     const secCliente = modo === "nova" ? `
       <section class="secao"><h3>Cliente e locação</h3>
         <div style="display:flex;gap:8px;align-items:flex-end">
@@ -184,7 +191,10 @@
         <div class="aviso-linha" data-cli-info hidden></div>
         <div class="linha-campos c3">
           <label class="campo"><span>Sigla do cliente</span><input data-k="sigla" maxlength="5" style="text-transform:uppercase"><small>vai no número da fatura</small></label>
-          <label class="campo"><span>Registro</span><select data-k="regAuto"><option value="1">Automático</option><option value="0">Informar manualmente</option></select></label>
+          ${campoNumero}
+        </div>
+        <div class="linha-campos c3">
+          <label class="campo"><span>Registro da locação (contrato)</span><select data-k="regAuto"><option value="1">Automático</option><option value="0">Informar manualmente</option></select></label>
           <label class="campo" data-reg-manual hidden><span>Nº do registro</span><input data-k="regManual" type="number" min="1"></label>
           <label class="campo"><span>Período inicial</span><input data-k="seqInicial" type="number" min="0"><small>0 = 1º mês</small></label>
         </div>
@@ -193,6 +203,7 @@
       </section>` : `
       <section class="secao"><h3>${modo === "renovar" ? "Renovação" : "Fatura"}</h3>
         <div><b>${esc(ML.nomeCliente(E.clienteId))}</b><br><small class="muted">Locação ${esc(C.padReg(orig.registro, cfg.digitosRegistro))} · ${modo === "renovar" ? `renovando a partir de <b>${esc(orig.id)}</b> (${C.dataBRc(orig.periodoIni)} a ${C.dataBRc(orig.periodoFim)})` : `emitida em ${C.dataBR(orig.dataEmissao)}${orig.emitidoPor ? " por " + esc(orig.emitidoPor) : ""}`}</small></div>
+        ${modo === "renovar" ? `<div class="linha-campos c3">${campoNumero}</div>` : ""}
         ${modo === "renovar" && !(cliente() || {}).sigla ? `<div class="aviso-linha lar">Este cliente ainda não tem sigla. Cadastre em Clientes para ela aparecer no número.</div>` : ""}
         ${modo === "editar" ? `<label class="check"><input type="checkbox" data-k="atualizarCadastro"> Atualizar dados do cliente e do prestador com o cadastro atual</label>` : ""}
       </section>`;
@@ -248,10 +259,11 @@
 
     // ----------------------------- ligação dos campos
     const campo = (k) => $(`[data-k="${k}"]`, ed);
-    for (const k of ["sigla", "regManual", "seqInicial", "emissorId", "dataEmissao", "vencimento", "periodoIni", "periodoFim", "servico", "dataInicio", "discriminacao", "outrasInfo", "obs", "enderecoOperacao"]) {
+    for (const k of ["sigla", "regManual", "numManual", "seqInicial", "emissorId", "dataEmissao", "vencimento", "periodoIni", "periodoFim", "servico", "dataInicio", "discriminacao", "outrasInfo", "obs", "enderecoOperacao"]) {
       const c = campo(k); if (c) c.value = E[k] == null ? "" : E[k];
     }
     if (campo("regAuto")) campo("regAuto").value = E.regAuto ? "1" : "0";
+    if (campo("numAuto")) campo("numAuto").value = E.numAuto === false ? "0" : "1";
     if (campo("clienteTxt") && cliente()) campo("clienteTxt").value = cliente().razaoSocial;
 
     if (ML.autocompletarEndereco && campo("enderecoObra")) ML.autocompletarEndereco(campo("enderecoObra"));
@@ -282,6 +294,7 @@
         if (c) { E.sigla = c.sigla || C.sugerirSigla(c.razaoSocial); campo("sigla").value = E.sigla; }
       } else if (k === "atualizarCadastro") E.atualizarCadastro = t.checked;
       else if (k === "regAuto") E.regAuto = t.value === "1";
+      else if (k === "numAuto") { E.numAuto = t.value === "1"; if (!E.numAuto && !E.numManual) { E.numManual = numeroPrevAuto(); campo("numManual").value = E.numManual; } }
       else E[k] = t.value;
       if (k === "enderecoObra" && E.localEsc) { E.localEsc = null; const st = $("[data-local-st]", ed); if (st) st.textContent = ""; }
       if (k === "discriminacao") E.discAuto = false;
@@ -293,7 +306,7 @@
       atualizar();
     });
     let anteriorIni = E.periodoIni;
-    ed.addEventListener("change", (e) => { if (e.target.dataset.k === "regAuto" || e.target.dataset.k === "atualizarCadastro") e.target.dispatchEvent(new Event("input", { bubbles: true })); });
+    ed.addEventListener("change", (e) => { if (e.target.dataset.k === "regAuto" || e.target.dataset.k === "numAuto" || e.target.dataset.k === "atualizarCadastro") e.target.dispatchEvent(new Event("input", { bubbles: true })); });
     ed.addEventListener("focusout", (e) => {
       const t = e.target;
       if ((t.dataset.c === "unitario" || t.dataset.campo === "unitario") && t.value) t.value = C.moeda(C.numBR(t.value), true);
@@ -437,7 +450,8 @@
     // ----------------------------- atualização de cabeçalho e prévia
     let tmrPrev, urlPrev = "", geracao = 0;
     function atualizar() {
-      $("[data-num]", ed).textContent = numeroPrev();
+      $("[data-num]", ed).textContent = numeroPrev() || "—";
+      const nm = $("[data-num-manual]", ed); if (nm) nm.hidden = E.numAuto;
       if (modo === "nova") {
         $("[data-reg-manual]", ed).hidden = E.regAuto;
         const info = $("[data-cli-info]", ed), c = cliente();
@@ -503,6 +517,11 @@
         if (!E.regAuto && S.loc.has(+E.regManual)) erros.push("Esse registro já está em uso.");
         if (!C.limparSigla(E.sigla)) erros.push("Informe a sigla do cliente (letras).");
       }
+      if (modo !== "editar" && !E.numAuto) {
+        const n = String(E.numManual || "").trim().toUpperCase();
+        if (!n) erros.push("Informe o número da fatura (ou volte para automático).");
+        else if (S.faturas.some((x) => x.id === n)) erros.push(`Já existe a fatura ${n}. Escolha outro número.`);
+      }
       if (!E.dataEmissao) erros.push("Informe a data de emissão.");
       if (!E.vencimento) erros.push("Informe o vencimento.");
       if (!E.itens.length) erros.push("Insira pelo menos um equipamento nos itens.");
@@ -518,6 +537,7 @@
       bt.disabled = true;
       const pf = { dataEmissao: E.dataEmissao, periodoIni: E.periodoIni, periodoFim: E.periodoFim, vencimento: E.vencimento,
         discriminacao: modo === "nova" && E.discAuto ? discAutomatica() : E.discriminacao, itens, outrasInfo: E.outrasInfo, obs: E.obs, enderecoOperacao: endOperacao() };
+      if (modo !== "editar" && !E.numAuto) pf.numeroManual = String(E.numManual || "").trim().toUpperCase();
       try {
         let nova;
         if (modo === "nova") {
