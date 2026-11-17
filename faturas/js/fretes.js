@@ -345,6 +345,98 @@
   }
   ML.registrarFrete = registrarFrete;
 
+  // ================================================================ encerrar locação (pede o frete de devolução)
+  function encerrarLocacao(l) {
+    if (!l) return;
+    const cli = S.cli.get(l.clienteId) || {}, rs = resumo(l.registro), hoje = ML.hoje();
+    const abertas = (S.fatsDe.get(l.registro) || []).filter((f) => f.status === "emitida");
+    const ativos = (S.transp || []).filter((t) => t.ativo);
+    const devs = rs.fs.filter((f) => f.tipo === "devolucao");
+    const corpo = el(`<div style="display:flex;flex-direction:column;gap:12px">
+      <div class="aviso-linha"><b>${esc(cli.razaoSocial || "")}</b> · locação ${esc(C.padReg(l.registro, S.cfg.digitosRegistro))}${l.local && (l.local.nome || l.local.endereco) ? " · " + esc(l.local.nome || l.local.endereco) : ""}</div>
+      ${abertas.length ? `<div class="aviso-linha lar">${ic("alerta")} Esta locação tem ${abertas.length} fatura${abertas.length === 1 ? "" : "s"} em aberto (${C.moeda(soma(abertas, "total"))}). Encerrar não cancela as faturas — elas continuam na cobrança.</div>` : ""}
+      <label class="campo" style="max-width:240px"><span>Data da devolução / encerramento</span><input type="date" name="data" value="${hoje}"></label>
+      <div class="sec-tit">${ic("caminhao")} Frete de devolução</div>
+      ${devs.length ? `<div class="aviso-linha verde">${ic("check")} Devolução já registrada: ${devs.map((f) => `<b>${C.moeda(f.valor)}</b> · ${esc(f.transportador || "")}${f.placa ? " · " + esc(f.placa) : ""}`).join("; ")}</div>${resumoHtml(rs)}` : `
+        ${resumoHtml(rs, "devolucao")}
+        <small class="muted">Combine o frete com o prestador dentro do teto. Se passar, o app exige justificativa e grava uma ocorrência.</small>
+        <label class="check"><input type="checkbox" name="semfrete"> Sem frete de devolução (o cliente devolveu o equipamento por conta própria)</label>
+        <div data-campos-frete style="display:flex;flex-direction:column;gap:12px">
+          <div class="linha-campos c2">
+            <label class="campo"><span>Prestador (frete)</span><select name="transp"><option value="">— escolha —</option>${ativos.map((t) => `<option value="${t.id}">${esc(t.nome)}</option>`).join("")}<option value="novo">+ Cadastrar novo prestador…</option></select></label>
+            <label class="campo"><span>Caminhão prancha</span><select name="cam"><option value="">— escolha o prestador —</option></select></label></div>
+          <div class="linha-campos c2">
+            <label class="campo"><span>Valor pago ao prestador</span><input name="valor" inputmode="decimal" placeholder="0,00"></label>
+            <label class="check" style="align-self:end;padding-bottom:9px"><input type="checkbox" name="pago"> Já foi pago ao prestador</label></div>
+          <div class="linha-campos c2" data-pg hidden>
+            <label class="campo"><span>Pago em</span><input type="date" name="pago_em" value="${hoje}"></label>
+            <label class="campo"><span>Forma</span><select name="forma">${FORMAS.map((f) => `<option>${f}</option>`).join("")}</select></label></div>
+          <div data-excesso></div>
+        </div>`}
+      <label class="campo"><span>Observação (opcional)</span><input name="obs" placeholder="ex.: equipamento voltou com avaria no cesto"></label></div>`);
+    const v = (n) => $(`[name=${n}]`, corpo);
+    let excede = 0;
+    const semFrete = () => !!(v("semfrete") && v("semfrete").checked);
+    function caminhoes() {
+      if (!v("transp")) return;
+      const t = (S.transp || []).find((x) => x.id === +v("transp").value), cams = t ? t.dados.caminhoes || [] : [];
+      v("cam").innerHTML = cams.length ? cams.map((c, i) => `<option value="${i}">${esc(camTxt(c))}</option>`).join("") : `<option value="">${t ? "— sem caminhão cadastrado —" : "— escolha o prestador —"}</option>`;
+    }
+    function recalcular() {
+      const exc = $("[data-excesso]", corpo); if (!exc) return;
+      const val = r2(C.numBR(v("valor").value));
+      const novo = !semFrete() && val > 0 ? r2(Math.max(0, rs.pago + val - rs.cobrado)) : 0;
+      if ((novo > 0) !== !!$("[name=just]", exc)) {
+        exc.innerHTML = novo > 0 ? `<div class="aviso-linha verm frete-alerta">${ic("alerta")}<div><b data-exc-txt></b>
+          <label class="campo" style="margin-top:8px"><span>Justificativa (obrigatória — fica registrada)</span><input name="just" placeholder="ex.: retirada urgente em Anápolis no fim de semana"></label></div></div>` : "";
+      }
+      excede = novo;
+      const t = $("[data-exc-txt]", exc);
+      if (t) t.textContent = `Atenção: com este valor o frete pago fica ${C.moeda(novo)} acima do que foi cobrado do cliente (${C.moeda(rs.cobrado)}).`;
+    }
+    ML.modal({ titulo: "Encerrar locação", corpo, classe: "medio", botoes: [{ texto: "Cancelar" }, { texto: "Encerrar locação", classe: "primario", icone: "check", acao: async () => {
+      const data = v("data").value; if (!data) throw new Error("Informe a data da devolução.");
+      let linha = null;
+      if (!devs.length && !semFrete()) {
+        const tId = v("transp").value;
+        if (!tId || tId === "novo") throw new Error("Escolha o prestador do frete de devolução — ou marque “Sem frete de devolução”.");
+        const val = r2(C.numBR(v("valor").value));
+        if (!(val > 0)) throw new Error("Informe o valor pago ao prestador pela devolução.");
+        recalcular();
+        const just = ($("[name=just]", corpo) || {}).value || "";
+        if (excede > 0) {
+          if (!just.trim()) { $("[name=just]", corpo).focus(); throw new Error("Explique por que o frete passou do valor cobrado do cliente."); }
+          if (!await ML.confirmar("Frete acima do cobrado", `O frete pago vai ficar <b>${C.moeda(excede)}</b> acima do valor cobrado do cliente. Isso fica <b>registrado como ocorrência</b>. Confirmar o encerramento?`, "Registrar e encerrar", true)) return false;
+        }
+        const t = (S.transp || []).find((x) => x.id === +tId), cam = ((t && t.dados.caminhoes) || [])[+v("cam").value] || {};
+        const pago = v("pago").checked;
+        linha = { registro: l.registro, tipo: "devolucao", data, transportador_id: +tId, transportador: t ? t.nome : "", placa: cam.placa || "", tipo_caminhao: cam.tipo || "",
+          valor: val, justificativa: excede > 0 ? just.trim() : "", pago_em: pago ? v("pago_em").value || hoje : null, forma: pago ? v("forma").value : "", obs: v("obs").value.trim() };
+      } else if (!devs.length && !await ML.confirmar("Encerrar sem frete", "Encerrar a locação <b>sem registrar frete de devolução</b>? Use só quando o cliente devolveu o equipamento por conta própria.", "Encerrar sem frete")) return false;
+      if (linha) { const r = await ML.sb.from("fat_fretes").insert(linha); if (r.error) throw r.error; }
+      await ML.rpc("fat_salvar_locacao", { p_registro: l.registro, p_dados: Object.assign({ status: "encerrada", dataEncerramento: data },
+        semFrete() ? { devolucaoSemFrete: true } : {}, v("obs").value.trim() ? { obsEncerramento: v("obs").value.trim() } : {}) });
+      ML.aviso(linha && excede > 0 ? "Locação encerrada — frete acima do cobrado registrado como ocorrência." : linha ? "Locação encerrada e frete de devolução registrado." : "Locação encerrada.", linha && excede > 0 ? "erro" : "ok");
+      await ML.recarregarERender();
+    } }] });
+    caminhoes(); recalcular();
+    corpo.addEventListener("change", (e) => {
+      const n = e.target.name;
+      if (n === "semfrete") { $("[data-campos-frete]", corpo).hidden = e.target.checked; recalcular(); }
+      if (n === "pago") $("[data-pg]", corpo).hidden = !e.target.checked;
+      if (n === "transp") {
+        if (e.target.value === "novo") {
+          e.target.value = "";
+          editarPrestador(null, (novo) => { e.target.insertBefore(el(`<option value="${novo.id}">${esc(novo.nome)}</option>`), e.target.querySelector("[value=novo]")); e.target.value = String(novo.id); caminhoes(); });
+        }
+        caminhoes();
+      }
+    });
+    corpo.addEventListener("input", (e) => { if (e.target.name === "valor") recalcular(); });
+    corpo.addEventListener("focusout", (e) => { if (e.target.name === "valor" && e.target.value.trim()) e.target.value = C.moeda(C.numBR(e.target.value), true); });
+  }
+  ML.encerrarLocacao = encerrarLocacao;
+
   // ================================================================ pagamento aos prestadores
   function pagar(ls) {
     if (!ls.length) return ML.aviso("Selecione os fretes a pagar.");

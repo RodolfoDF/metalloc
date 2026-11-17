@@ -502,3 +502,5 @@ tr.linha-verm td { background: var(--vermelho-fundo); }
 .campo-btn .btn { white-space: nowrap; }
 [data-local-st] { color: var(--verde); font-size: 12px; display: inline-flex; align-items: center; gap: 4px; }
 [data-local-st] i { width: 13px; height: 13px; }
+.aviso-linha.verde { background: var(--verde-fundo); color: var(--verde); border-color: var(--verde-borda); }
+.loc-acoes { flex-wrap: wrap; }

@@ -593,12 +593,13 @@
     }
 
     main.addEventListener("click", (e) => {
-      const b = e.target.closest("[data-modo],[data-sit],[data-acao],[data-especial],[data-loc-abrir],[data-loc-menu],[data-renovar-loc]");
+      const b = e.target.closest("[data-modo],[data-sit],[data-acao],[data-especial],[data-loc-abrir],[data-loc-menu],[data-renovar-loc],[data-encerrar-loc]");
       if (!b) return;
       if (b.dataset.modo) { u.modo = b.dataset.modo; u.especial = ""; return render(); }
       if (b.dataset.sit) { u.sit = b.dataset.sit; return render(); }
       if (b.dataset.especial) { u.especial = u.especial ? "" : b.dataset.especial; if (u.especial) u.locStatus = "ativa"; return render(); }
       if (b.dataset.renovarLoc) { e.stopPropagation(); return ML.abrirEditor({ modo: "renovar", registro: +b.dataset.renovarLoc }); }
+      if (b.dataset.encerrarLoc) { e.stopPropagation(); return ML.encerrarLocacao(S.loc.get(+b.dataset.encerrarLoc)); }
       if (b.dataset.locMenu) { e.stopPropagation(); return editarLocacao(S.loc.get(+b.dataset.locMenu)); }
       if (b.dataset.locAbrir) {
         if (e.target.closest(".loc-corpo")) return;
@@ -649,7 +650,8 @@
           ${temVencida ? `<span class="etq verm" style="width:max-content">em aberto ${C.moeda(totalAberto)}</span>` : ""}</div>
         ${vg(ult ? ult.total : 0, "medio")}
         <div class="loc-acoes">
-          ${l.status === "ativa" ? `<button class="btn peq ${pend ? "primario" : ""}" data-renovar-loc="${l.registro}">${ic("renovar")}Renovar</button>` : ""}
+          ${l.status === "ativa" ? `<button class="btn peq ${pend ? "primario" : ""}" data-renovar-loc="${l.registro}">${ic("renovar")}Renovar</button>
+            <button class="btn peq" data-encerrar-loc="${l.registro}" title="Equipamento devolvido: encerra a locação e registra o frete de devolução">${ic("check")}Encerrar</button>` : ""}
           <button class="ic-btn peq" title="Dados da locação" data-loc-menu="${l.registro}">${ic("editar")}</button>
           <span class="seta-abrir">${ic("baixo")}</span></div>
       </div>
@@ -731,7 +733,7 @@
           ${f.status !== "emitida" ? `<button class="btn" data-a="reabrir">${ic("relogio")}Voltar p/ em aberto</button>` : ""}
           <button class="btn" data-a="editar">${ic("editar")}Editar</button>
           <button class="btn" data-a="numero">${ic("numero")}Alterar número</button>
-          ${ehUltima && l.status === "ativa" ? `<button class="btn" data-a="renovar">${ic("renovar")}Renovar</button>` : ""}
+          ${ehUltima && l.status === "ativa" ? `<button class="btn" data-a="renovar">${ic("renovar")}Renovar</button><button class="btn" data-a="encerrar">${ic("check")}Encerrar locação</button>` : ""}
           ${f.status !== "cancelada" ? `<button class="btn perigo" data-a="cancelar">${ic("parar")}Cancelar fatura</button>` : ""}
           ${ehUltima ? `<button class="btn perigo" data-a="excluir">${ic("lixo")}Excluir</button>` : ""}
         </div>
@@ -753,6 +755,7 @@
         if (a === "reabrir") { await mudarStatus(f, "emitida"); m.fechar(); return; }
         if (a === "editar") { m.fechar(); return ML.abrirEditor({ modo: "editar", registro: f.registro, seq: f.seq }); }
         if (a === "renovar") { m.fechar(); return ML.abrirEditor({ modo: "renovar", registro: f.registro }); }
+        if (a === "encerrar") { m.fechar(); return ML.encerrarLocacao(S.loc.get(f.registro)); }
         if (a === "numero") { m.fechar(); return alterarNumero(f); }
         if (a === "cancelar") {
           if (!await confirmar("Cancelar fatura", `A fatura <b>${esc(f.id)}</b> ficará marcada como <b>cancelada</b> (com selo no PDF) e sai dos totais. Ela continua no histórico.`, "Cancelar fatura", true)) return;
