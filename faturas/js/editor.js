@@ -180,7 +180,7 @@
     if (window.matchMedia("(max-width: 1180px)").matches) $(".ver-prev-btn", ed).style.display = "";
 
     const campoNumero = `
-          <label class="campo"><span>Número da fatura</span><select data-k="numAuto"><option value="1">Automático (${cfg.formatoNumero === "registro" ? "registro" : "data de emissão"})</option><option value="0">Informar manualmente</option></select></label>
+          <label class="campo"><span>Número da fatura</span><select data-k="numAuto"><option value="1">Automático</option><option value="0">Informar manualmente</option></select><small>${cfg.formatoNumero === "registro" ? "sigla + registro" : "sigla + data de emissão"}</small></label>
           <label class="campo" data-num-manual hidden><span>Nº da fatura</span><input data-k="numManual" maxlength="40" style="text-transform:uppercase" placeholder="ex.: TEM17112026-0"></label>`;
     const secCliente = modo === "nova" ? `
       <section class="secao"><h3>Cliente e locação</h3>
