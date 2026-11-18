@@ -792,7 +792,7 @@
     const dig = S.cfg.digitosRegistro;
     const usados = new Set(S.faturas.filter((x) => x !== f).map((x) => x.id));
     const lc = S.loc.get(f.registro), siglaF = f.sigla || (f.tomador || {}).sigla || ((lc && S.cli.get(lc.clienteId)) || {}).sigla || "";
-    const sug = C.numeroData(siglaF, f.dataEmissao, usados);
+    const sug = C.numeroData(siglaF, f.dataEmissao, f.seq, usados);
     const corpo = el(`<div style="display:flex;flex-direction:column;gap:12px">
       <div class="aviso-linha">Número atual: <b>${esc(f.id)}</b></div>
       <label class="campo"><span>Número da fatura</span><input name="num" maxlength="40" value="${esc(f.id)}" style="text-transform:uppercase">
@@ -805,7 +805,7 @@
           <div data-escopo hidden style="display:flex;flex-direction:column;gap:8px">
             <label class="check"><input type="radio" name="esc" value="toda" checked> Mudar a locação inteira (todas as ${(S.fatsDe.get(f.registro) || []).length} faturas deste registro)</label>
             <label class="check"><input type="radio" name="esc" value="so"> Mudar só esta fatura</label></div>
-          <small class="muted">Faturas com número pela data ou digitado à mão mantêm o número; só mudam de locação/período.</small></div></details>
+          <small class="muted">Número pela data: muda só o período depois do traço. Número digitado à mão fica como está.</small></div></details>
       <div class="aviso-linha lar" data-prev hidden></div></div>`);
     const atualizar = () => {
       const reg = +$("[name=reg]", corpo).value, seq = +$("[name=seq]", corpo).value, num = $("[name=num]", corpo).value.trim().toUpperCase();
@@ -824,7 +824,8 @@
         const toda = reg !== f.registro && $("[name=esc]:checked", corpo).value === "toda";
         const r = await rpc("fat_alterar_numero", { p_registro: f.registro, p_seq: f.seq, p_novo_reg: reg, p_novo_seq: seq, p_toda: toda });
         alvo = { registro: reg, seq }; msg.push("locação/período alterados");
-        if (r && r.fatura && r.fatura.id === num) { aviso(`Fatura ${num}: ${msg.join(", ")}.`, "ok"); return recarregarERender(); }
+        // número não foi mexido no campo: fica o que o sistema refez (ex.: período novo depois do traço)
+        if (r && r.fatura && (r.fatura.id === num || num === f.id)) { aviso(`Fatura ${r.fatura.id}: ${msg.join(", ")}.`, "ok"); return recarregarERender(); }
       }
       if (num !== f.id || msg.length) {
         const d = await rpc("fat_definir_numero", { p_registro: alvo.registro, p_seq: alvo.seq, p_numero: num });

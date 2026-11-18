@@ -62,11 +62,14 @@
   function limparSigla(s) { return semAcento(s).toUpperCase().replace(/[^A-Z]/g, "").slice(0, 5); }
   function padReg(reg, dig) { const s = String(reg); return s.length >= (dig || 4) ? s : s.padStart(dig || 4, "0"); }
   function numeroFatura(sigla, reg, seq, dig) { return (sigla || "") + padReg(reg, dig) + "-" + seq; }
-  // número pela data de emissão: SIGLA + DDMMAAAA + "-" + n (n livre para o mesmo cliente no mesmo dia)
-  function numeroData(sigla, data, existentes) {
-    const d = String(data || ""), base = String(sigla || "").toUpperCase() + d.slice(8, 10) + d.slice(5, 7) + d.slice(0, 4) + "-";
-    let n = 0; while (existentes && existentes.has(base + n)) n++;
-    return base + n;
+  // número pela data de emissão: SIGLA + DDMMAAAA + "-" + período (0 = implantação, 1 = 1ª renovação…);
+  // se já existir (outra locação do mesmo cliente, mesmo dia e período), ganha letra antes do traço: TEM17112026B-0
+  function numeroData(sigla, data, seq, existentes) {
+    const d = String(data || ""), base = String(sigla || "").toUpperCase() + d.slice(8, 10) + d.slice(5, 7) + d.slice(0, 4);
+    const fim = "-" + (+seq || 0);
+    let num = base + fim, i = 0;
+    while (existentes && existentes.has(num)) { i++; num = base + String.fromCharCode(65 + i) + fim; }
+    return num;
   }
 
   // ------------------------------------------------------------ situação da fatura
