@@ -95,7 +95,7 @@
     const q = C.semAcento(st.busca || "").toLowerCase();
     const casa = (...t) => !q || C.semAcento(t.join(" ")).toLowerCase().includes(q);
     const nomeCli = (reg) => { const l = S.loc.get(reg); const c = l && S.cli.get(l.clienteId); return c ? c.razaoSocial : ""; };
-    const regTxt = (reg) => C.padReg(reg, S.cfg.digitosRegistro);
+    const regTxt = (reg) => C.padReg(reg, S.cfg.digitosRegistro) + (ML.apelidoDe && ML.apelidoDe(reg) ? " · " + ML.apelidoDe(reg) : "");
 
     if (st.aba === "locacoes") {
       const f = st.filtro;
@@ -211,7 +211,7 @@
     if (!l) return;
     const rs = resumo(l.registro), cli = S.cli.get(l.clienteId) || {}, s = estado(l, rs);
     const corpo = el(`<div style="display:flex;flex-direction:column;gap:12px">
-      <div class="aviso-linha"><b>${esc(cli.razaoSocial || "")}</b> · locação ${esc(C.padReg(l.registro, S.cfg.digitosRegistro))}${l.local && (l.local.nome || l.local.endereco) ? " · " + esc(l.local.nome || l.local.endereco) : ""}</div>
+      <div class="aviso-linha"><b>${esc(cli.razaoSocial || "")}</b> · locação ${esc(C.padReg(l.registro, S.cfg.digitosRegistro))}${ML.apelidoLoc(l) ? " · <b>" + esc(ML.apelidoLoc(l)) + "</b>" : ""}${l.local && (l.local.nome || l.local.endereco) ? " · " + esc(l.local.nome || l.local.endereco) : ""}</div>
       ${resumoHtml(rs)}
       <div>${etqEst(s)}</div>
       ${rs.fs.length ? `<div class="tabela-wrap"><table class="tab"><thead><tr><th>Data</th><th>Frete</th><th>Prestador / caminhão</th><th class="direita">Valor</th><th>Pagamento</th><th></th></tr></thead><tbody>
@@ -245,7 +245,7 @@
       .map((l) => ({ l, c: S.cli.get(l.clienteId) || {} })).sort((a, b) => (a.c.razaoSocial || "").localeCompare(b.c.razaoSocial || ""));
     const corpo = el(`<div style="display:flex;flex-direction:column;gap:12px">
       ${reg && !ed ? "" : `<label class="campo"><span>Locação</span><select name="registro" ${ed ? "disabled" : ""}><option value="">— escolha a locação —</option>
-        ${opcoesLoc.map(({ l, c }) => `<option value="${l.registro}" ${l.registro === reg ? "selected" : ""}>${esc(c.sigla ? c.sigla + " · " : "")}${esc(c.razaoSocial || "")} — ${esc(C.padReg(l.registro, S.cfg.digitosRegistro))}${l.local && (l.local.nome || l.local.endereco) ? " · " + esc(l.local.nome || l.local.endereco) : ""}</option>`).join("")}</select></label>`}
+        ${opcoesLoc.map(({ l, c }) => `<option value="${l.registro}" ${l.registro === reg ? "selected" : ""}>${esc(c.sigla ? c.sigla + " · " : "")}${esc(c.razaoSocial || "")} — ${esc(C.padReg(l.registro, S.cfg.digitosRegistro))}${ML.apelidoLoc(l) ? " · " + esc(ML.apelidoLoc(l)) : ""}${l.local && (l.local.nome || l.local.endereco) ? " · " + esc(l.local.nome || l.local.endereco) : ""}</option>`).join("")}</select></label>`}
       <div data-cab></div>
       <div class="alternar" data-tipos>${["entrega", "devolucao", "outro"].map((k) => `<button type="button" data-tipo="${k}" class="${tp === k ? "ativo" : ""}">${NOME_TIPO[k]}</button>`).join("")}</div>
       <div data-resumo></div>
@@ -353,7 +353,7 @@
     const ativos = (S.transp || []).filter((t) => t.ativo);
     const devs = rs.fs.filter((f) => f.tipo === "devolucao");
     const corpo = el(`<div style="display:flex;flex-direction:column;gap:12px">
-      <div class="aviso-linha"><b>${esc(cli.razaoSocial || "")}</b> · locação ${esc(C.padReg(l.registro, S.cfg.digitosRegistro))}${l.local && (l.local.nome || l.local.endereco) ? " · " + esc(l.local.nome || l.local.endereco) : ""}</div>
+      <div class="aviso-linha"><b>${esc(cli.razaoSocial || "")}</b> · locação ${esc(C.padReg(l.registro, S.cfg.digitosRegistro))}${ML.apelidoLoc(l) ? " · <b>" + esc(ML.apelidoLoc(l)) + "</b>" : ""}${l.local && (l.local.nome || l.local.endereco) ? " · " + esc(l.local.nome || l.local.endereco) : ""}</div>
       ${abertas.length ? `<div class="aviso-linha lar">${ic("alerta")} Esta locação tem ${abertas.length} fatura${abertas.length === 1 ? "" : "s"} em aberto (${C.moeda(soma(abertas, "total"))}). Encerrar não cancela as faturas — elas continuam na cobrança.</div>` : ""}
       <label class="campo" style="max-width:240px"><span>Data da devolução / encerramento</span><input type="date" name="data" value="${hoje}"></label>
       <div class="sec-tit">${ic("caminhao")} Frete de devolução</div>
@@ -545,14 +545,14 @@
       ML.aviso("Gerando planilha…");
       await ML.carregarScript("vendor/exceljs.min.js");
       const wb = new window.ExcelJS.Workbook(), ws = wb.addWorksheet("Fretes", { views: [{ state: "frozen", ySplit: 1 }] });
-      ws.columns = [{ header: "Data", key: "data", width: 12 }, { header: "Frete", key: "tipo", width: 11 }, { header: "Locação", key: "reg", width: 11 }, { header: "Cliente", key: "cli", width: 38 },
+      ws.columns = [{ header: "Data", key: "data", width: 12 }, { header: "Frete", key: "tipo", width: 11 }, { header: "Locação", key: "reg", width: 11 }, { header: "Cliente", key: "cli", width: 38 }, { header: "Nome da locação", key: "ap", width: 24 },
         { header: "Prestador", key: "tr", width: 28 }, { header: "Placa", key: "placa", width: 11 }, { header: "Prancha", key: "cam", width: 10 }, { header: "Valor pago", key: "valor", width: 13 },
         { header: "Cobrado do cliente (locação)", key: "cob", width: 16 }, { header: "Acima do cobrado", key: "exc", width: 14 }, { header: "Pagamento", key: "pg", width: 12 }, { header: "Forma", key: "forma", width: 13 },
         { header: "Fatura", key: "fat", width: 16 }, { header: "Justificativa", key: "just", width: 36 }, { header: "Obs.", key: "obs", width: 30 }];
       const dt = (s) => s ? new Date(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)) : null;
       for (const f of fretes.slice().sort((a, b) => (a.data || "").localeCompare(b.data || ""))) {
         const l = S.loc.get(f.registro), c = l ? S.cli.get(l.clienteId) || {} : {};
-        ws.addRow({ data: dt(f.data), tipo: NOME_TIPO[f.tipo], reg: C.padReg(f.registro, S.cfg.digitosRegistro), cli: c.razaoSocial || "", tr: f.transportador, placa: f.placa, cam: f.tipo_caminhao,
+        ws.addRow({ data: dt(f.data), tipo: NOME_TIPO[f.tipo], reg: C.padReg(f.registro, S.cfg.digitosRegistro), cli: c.razaoSocial || "", ap: ML.apelidoLoc(l), tr: f.transportador, placa: f.placa, cam: f.tipo_caminhao,
           valor: f.valor, cob: ML.freteCobrado(f.registro), exc: f.excesso || null, pg: f.pago_em ? dt(f.pago_em) : "A pagar", forma: f.forma, fat: f.fatura, just: f.justificativa, obs: f.obs });
       }
       ws.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };

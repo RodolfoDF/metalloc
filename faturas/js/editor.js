@@ -95,7 +95,7 @@
       const per = { ini: d, fim: C.addDias(C.addMeses(d, 1), -1) };
       Object.assign(E, { clienteId: op.clienteId || "", emissorId: cfg.emissorPadraoId || (S.emissores[0] || {}).id || "", sigla: "", regAuto: true, regManual: "", seqInicial: 0, numAuto: true, numManual: "",
         servico: "", dataInicio: d, dataEmissao: d, periodoIni: per.ini, periodoFim: per.fim, vencimento: C.addDias(d, dias),
-        discriminacao: "", outrasInfo: cfg.textoOutrasInfo || "", obs: "", enderecoObra: "", localNome: "" });
+        discriminacao: "", outrasInfo: cfg.textoOutrasInfo || "", obs: "", enderecoObra: "", localNome: "", apelido: "" });
       if (E.clienteId) E.sigla = (S.cli.get(E.clienteId) || {}).sigla || C.sugerirSigla((S.cli.get(E.clienteId) || {}).razaoSocial);
     } else if (modo === "renovar") {
       loc = S.loc.get(op.registro); orig = ML.ultimaFatura(op.registro);
@@ -189,6 +189,7 @@
           <button class="btn" data-acao="novo-cliente" title="Cadastrar cliente">${ic("mais")}Novo</button></div>
         <datalist id="lista-clientes">${S.clientes.map((c) => `<option value="${esc(c.razaoSocial)}">${esc((c.fantasia ? c.fantasia + " · " : "") + (c.documento || ""))}</option>`).join("")}</datalist>
         <div class="aviso-linha" data-cli-info hidden></div>
+        <label class="campo"><span>Nome da locação <small>(opcional — para reconhecer nas listas; não sai na fatura)</small></span><input data-k="apelido" maxlength="60" placeholder="ex.: Torre B – Santa Lúcia, Galpão 3, Obra do viaduto" autocomplete="off"></label>
         <div class="linha-campos c3">
           <label class="campo"><span>Sigla do cliente</span><input data-k="sigla" maxlength="5" style="text-transform:uppercase"><small>vai no número da fatura</small></label>
           ${campoNumero}
@@ -202,7 +203,7 @@
         <label class="campo"><span>Prestador de serviços</span><select data-k="emissorId">${S.emissores.map((e) => `<option value="${esc(e.id)}">${esc(e.razaoSocial)}</option>`).join("")}</select></label>
       </section>` : `
       <section class="secao"><h3>${modo === "renovar" ? "Renovação" : "Fatura"}</h3>
-        <div><b>${esc(ML.nomeCliente(E.clienteId))}</b><br><small class="muted">Locação ${esc(C.padReg(orig.registro, cfg.digitosRegistro))} · ${modo === "renovar" ? `renovando a partir de <b>${esc(orig.id)}</b> (${C.dataBRc(orig.periodoIni)} a ${C.dataBRc(orig.periodoFim)})` : `emitida em ${C.dataBR(orig.dataEmissao)}${orig.emitidoPor ? " por " + esc(orig.emitidoPor) : ""}`}</small></div>
+        <div>${ML.apelidoDe && ML.apelidoDe(orig.registro) ? `<span class="ap-mini grande">${ic("etiqueta")}${esc(ML.apelidoDe(orig.registro))}</span>` : ""}<b>${esc(ML.nomeCliente(E.clienteId))}</b><br><small class="muted">Locação ${esc(C.padReg(orig.registro, cfg.digitosRegistro))} · ${modo === "renovar" ? `renovando a partir de <b>${esc(orig.id)}</b> (${C.dataBRc(orig.periodoIni)} a ${C.dataBRc(orig.periodoFim)})` : `emitida em ${C.dataBR(orig.dataEmissao)}${orig.emitidoPor ? " por " + esc(orig.emitidoPor) : ""}`}</small></div>
         ${modo === "renovar" ? `<div class="linha-campos c3">${campoNumero}</div>` : ""}
         ${modo === "renovar" && !(cliente() || {}).sigla ? `<div class="aviso-linha lar">Este cliente ainda não tem sigla. Cadastre em Clientes para ela aparecer no número.</div>` : ""}
         ${modo === "editar" ? `<label class="check"><input type="checkbox" data-k="atualizarCadastro"> Atualizar dados do cliente e do prestador com o cadastro atual</label>` : ""}
@@ -516,6 +517,7 @@
         if (!E.regAuto && !(+E.regManual > 0)) erros.push("Informe o número do registro.");
         if (!E.regAuto && S.loc.has(+E.regManual)) erros.push("Esse registro já está em uso.");
         if (!C.limparSigla(E.sigla)) erros.push("Informe a sigla do cliente (letras).");
+        try { ML.validarApelido(String(E.apelido || "").replace(/\s+/g, " ").trim(), null); } catch (er) { erros.push(er.message); }
       }
       if (modo !== "editar" && !E.numAuto) {
         const n = String(E.numManual || "").trim().toUpperCase();
@@ -548,7 +550,7 @@
             if (r.error) throw r.error;
           }
           const r = await ML.rpc("fat_nova_locacao", { p_loc: { clienteId: E.clienteId, emissorId: E.emissorId, registro: E.regAuto ? null : +E.regManual,
-            seqInicial: +E.seqInicial || 0, servico: servicoEfetivo(), dataInicio: E.dataInicio, equipamento: equipsTxt(), obs: "",
+            seqInicial: +E.seqInicial || 0, apelido: String(E.apelido || "").replace(/\s+/g, " ").trim(), servico: servicoEfetivo(), dataInicio: E.dataInicio, equipamento: equipsTxt(), obs: "",
             local: (E.enderecoObra || "").trim() || (E.localNome || "").trim() ? Object.assign({}, E.localEsc || {}, { endereco: (E.enderecoObra || "").trim(), nome: (E.localNome || "").trim().toUpperCase() },
               (() => { const r = !E.localEsc && ML.coordsEscolhidas ? ML.coordsEscolhidas(campo("enderecoObra")) : null; return r ? ML.localDeSugestao(r) : {}; })()) : null }, p_fat: pf });
           nova = r.fatura;

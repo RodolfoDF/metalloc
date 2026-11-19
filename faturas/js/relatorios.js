@@ -107,7 +107,7 @@
     const wb = novoLivro(ctx.ExcelJS);
     const ws = wb.addWorksheet("Faturas", { views: [{ state: "frozen", ySplit: 4, showGridLines: false }], pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9 } });
     const cols = [
-      { t: "Nº da fatura", w: 15, a: "center" }, { t: "Cliente", w: 40, q: 1 }, { t: "Equipamento", w: 26, q: 1 }, { t: "Local de operação", w: 24, q: 1 },
+      { t: "Nº da fatura", w: 15, a: "center" }, { t: "Cliente", w: 40, q: 1 }, { t: "Nome da locação", w: 24, q: 1 }, { t: "Equipamento", w: 26, q: 1 }, { t: "Local de operação", w: 24, q: 1 },
       { t: "Emissão", w: 12, f: "D" }, { t: "Período início", w: 13, f: "D" }, { t: "Período fim", w: 13, f: "D" },
       { t: "Vencimento", w: 13, f: "D" }, { t: "Situação", w: 12, a: "center" }, { t: "Pago em", w: 12, f: "D" },
       { t: "Locação", w: 15, f: "R" }, { t: "Frete", w: 13, f: "R" }, { t: "Total", w: 15, f: "R" },
@@ -121,7 +121,7 @@
       const sit = C.situacao(f, ctx.hoje);
       const r = C.rateio(f, ctx.nomes);
       const equip = [...new Set((f.itens || []).filter((i) => !i.frete).map((i) => i.equip).filter(Boolean))].join(" + ");
-      linhaDados(ws, [f.id, (f.tomador || {}).razaoSocial || "", equip, ctx.local ? ctx.local(f) : "", dataXL(f.dataEmissao), dataXL(f.periodoIni), dataXL(f.periodoFim),
+      linhaDados(ws, [f.id, (f.tomador || {}).razaoSocial || "", ctx.apelido ? ctx.apelido(f) : "", equip, ctx.local ? ctx.local(f) : "", dataXL(f.dataEmissao), dataXL(f.periodoIni), dataXL(f.periodoFim),
         dataXL(f.vencimento), C.NOME_SITUACAO[sit], dataXL(f.pagoEm), r.locacao, r.frete, +f.total || 0,
         C.textoDonos(f, ctx.nomes), f.emitidoPor || ""], cols, sit);
       tot[sit] += +f.total || 0; qtd[sit]++;
@@ -129,11 +129,11 @@
     }
     const ult = ws.lastRow.number;
     if (lista.length) {
-      const somar = [10, 11, 12]; somar.resultados = { 10: somaLoc, 11: somaFre, 12: somaTot };
+      const somar = [11, 12, 13]; somar.resultados = { 11: somaLoc, 12: somaFre, 13: somaTot };
       const rt = linhaTotal(ws, "Total (sem canceladas)", cols, h + 1, ult, []);
-      [[10, somaLoc], [11, somaFre], [12, somaTot]].forEach(([i, v]) => {
+      [[11, somaLoc], [12, somaFre], [13, somaTot]].forEach(([i, v]) => {
         const L = ws.getColumn(i + 1).letter, cel = rt.getCell(i + 1);
-        cel.value = { formula: `SUMIFS(${L}${h + 1}:${L}${ult},I${h + 1}:I${ult},"<>Cancelada")`, result: v };
+        cel.value = { formula: `SUMIFS(${L}${h + 1}:${L}${ult},J${h + 1}:J${ult},"<>Cancelada")`, result: v };
         cel.numFmt = FMT_R;
       });
     }

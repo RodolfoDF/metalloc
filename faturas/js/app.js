@@ -44,6 +44,7 @@
     quadro: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
     lista: '<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>',
     alvo: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
+    etiqueta: '<path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9-9-9z"/><circle cx="8" cy="8" r="1.6"/>',
     caminhao: '<path d="M1 7h12v9H1zM13 10h4l4 3.5V16h-8z"/><circle cx="5.5" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>',
     externo: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>',
   };
@@ -200,6 +201,38 @@
     if (l.status !== "ativa") return n ? `<span class="local-chip fixo">${ic("mapa")}${esc(n)}</span>` : "";
     return `<span class="local-wrap" data-local-wrap="${l.registro}"><button type="button" class="local-chip ${n ? "" : "vazio"} ${peq ? "peq" : ""}" data-local-edit="${l.registro}" title="${marcado ? "Marcado no mapa — clique para alterar" : "Definir o endereço da obra e marcar no mapa"}">${ic("mapa")}${n ? esc(n) : "definir local"}${n && !marcado ? " <small>(sem ponto)</small>" : ""}${ic("editar")}</button></span>`;
   }
+  // ------------------------------------------------ nome da locação (apelido dado pelo operador, uso interno)
+  const apelidoLoc = (l) => String((l && l.apelido) || "").trim();
+  const apelidoDe = (reg) => apelidoLoc(S.loc.get(reg));
+  function apelidoRepetido(nome, reg) {
+    const n = C.semAcento(String(nome || "")).toLowerCase().trim();
+    return n ? S.locacoes.find((x) => x.registro !== reg && x.status === "ativa" && C.semAcento(apelidoLoc(x)).toLowerCase() === n) : null;
+  }
+  function validarApelido(nome, reg) {
+    const r = apelidoRepetido(nome, reg);
+    if (r) throw new Error(`Já existe uma locação ativa com o nome “${apelidoLoc(r)}” (${nomeCliente(r.clienteId)}, locação ${C.padReg(r.registro, S.cfg.digitosRegistro)}). Escolha outro nome.`);
+  }
+  function chipNome(l) {
+    const ap = apelidoLoc(l);
+    if (ap) return `<button type="button" class="loc-nome" data-loc-nome="${l.registro}" title="Nome da locação — clique para alterar">${ic("etiqueta")}<span>${esc(ap)}</span>${ic("editar")}</button>`;
+    return `<button type="button" class="local-chip vazio" data-loc-nome="${l.registro}" title="Dar um nome para reconhecer esta locação">${ic("etiqueta")}dar nome${ic("editar")}</button>`;
+  }
+  function nomearLocacao(l) {
+    if (!l) return;
+    const corpo = el(`<div style="display:flex;flex-direction:column;gap:12px">
+      <div class="aviso-linha">${esc(nomeCliente(l.clienteId))} · locação ${esc(C.padReg(l.registro, S.cfg.digitosRegistro))}${equipLoc(l) ? " · " + esc(equipLoc(l)) : ""}</div>
+      <label class="campo"><span>Nome da locação</span><input name="apelido" maxlength="60" value="${esc(apelidoLoc(l))}" placeholder="ex.: Torre B – Santa Lúcia, Galpão 3, Obra do viaduto">
+        <small>Só para uso interno: aparece nas listas, na busca, no mapa e nos fretes. Não sai na fatura do cliente.</small></label></div>`);
+    modal({ titulo: "Nome da locação", corpo, botoes: [{ texto: "Cancelar" }, { texto: "Salvar", classe: "primario", acao: async () => {
+      const nome = $("[name=apelido]", corpo).value.replace(/\s+/g, " ").trim();
+      validarApelido(nome, l.registro);
+      await rpc("fat_salvar_locacao", { p_registro: l.registro, p_dados: { apelido: nome } });
+      aviso(nome ? `Locação agora se chama “${nome}”.` : "Nome da locação removido.", "ok");
+      await recarregarERender();
+    } }] });
+    setTimeout(() => { const i = $("[name=apelido]", corpo); if (i) { i.focus(); i.select(); } }, 60);
+  }
+
   function editarLocalInline(reg, wrap) {
     const l = S.loc.get(reg); if (!l || !wrap) return;
     wrap.innerHTML = `<span class="local-edit"><input list="lista-locais-op" value="${esc(localNome(l))}" placeholder="ex.: GEALI TAGUATINGA" maxlength="60">
@@ -478,7 +511,7 @@
   function tabelaRenovacoes(lista) {
     if (!lista.length) return `<div class="vazio">Nenhuma renovação nos próximos 7 dias.</div>`;
     return `<div class="tabela-wrap" style="max-height:520px"><table class="tab"><thead><tr><th>Locação</th><th>Período atual</th><th class="direita">Valor</th><th></th></tr></thead><tbody>
-      ${lista.map(({ l, u, dias }) => `<tr><td><b class="nfat">${esc(u.id)}</b><span class="cli-nome" style="max-width:220px">${esc(nomeCliente(l.clienteId))}</span><small class="muted">${esc(equipLoc(l))}</small></td>
+      ${lista.map(({ l, u, dias }) => `<tr><td><b class="nfat">${esc(u.id)}</b>${apelidoLoc(l) ? `<span class="ap-mini">${ic("etiqueta")}${esc(apelidoLoc(l))}</span>` : ""}<span class="cli-nome" style="max-width:220px">${esc(nomeCliente(l.clienteId))}</span><small class="muted">${esc(equipLoc(l))}</small></td>
         <td class="nowrap">${C.dataBRc(u.periodoIni)} a ${C.dataBRc(u.periodoFim)}<br><span class="etq ${dias < 0 ? "verm" : dias <= avisoDias() ? "lar" : ""}">${textoDias(dias)}</span></td>
         <td class="direita num nowrap">${C.moeda(u.total)}</td>
         <td class="acoes-td"><button class="btn peq primario" title="Renovar" data-renovar="${l.registro}">${ic("renovar")}</button></td></tr>`).join("")}
@@ -498,10 +531,10 @@
       if (s !== "cancelada") tot += +f.total || 0;
       const equip = [...new Set((f.itens || []).filter((i) => !i.frete).map((i) => i.equip).filter(Boolean))].join(" + ");
       if (o.compacta) return `<tr class="${s} clicavel" data-fat="${f.registro}:${f.seq}"><td class="nfat">${esc(f.id)}</td>
-        <td><span class="cli-nome" style="max-width:210px">${esc((f.tomador || {}).razaoSocial)}</span></td><td class="direita num nowrap">${C.moeda(f.total)}</td><td>${sitBadge(s)}</td></tr>`;
+        <td><span class="cli-nome" style="max-width:210px">${esc((f.tomador || {}).razaoSocial)}</span>${apelidoDe(f.registro) ? `<small class="muted">${esc(apelidoDe(f.registro))}</small>` : ""}</td><td class="direita num nowrap">${C.moeda(f.total)}</td><td>${sitBadge(s)}</td></tr>`;
       return `<tr class="${s} clicavel" data-fat="${f.registro}:${f.seq}">
         <td class="nfat">${esc(f.id)}</td>
-        ${o.semCliente ? "" : `<td><span class="cli-nome" title="${esc((f.tomador || {}).razaoSocial)}">${esc((f.tomador || {}).razaoSocial)}</span>${equip ? `<small class="muted">${esc(equip)}</small>` : ""}${(() => { const l = S.loc.get(f.registro), u = ultimaFatura(f.registro); return l && u && u.seq === f.seq ? chipLocal(l, true) : localDaFatura(f) ? `<small class="muted">${ic("mapa")} ${esc(localDaFatura(f))}</small>` : ""; })()}</td>`}
+        ${o.semCliente ? "" : `<td>${apelidoDe(f.registro) ? `<span class="ap-mini">${ic("etiqueta")}${esc(apelidoDe(f.registro))}</span>` : ""}<span class="cli-nome" title="${esc((f.tomador || {}).razaoSocial)}">${esc((f.tomador || {}).razaoSocial)}</span>${equip ? `<small class="muted">${esc(equip)}</small>` : ""}${(() => { const l = S.loc.get(f.registro), u = ultimaFatura(f.registro); return l && u && u.seq === f.seq ? chipLocal(l, true) : localDaFatura(f) ? `<small class="muted">${ic("mapa")} ${esc(localDaFatura(f))}</small>` : ""; })()}</td>`}
         <td class="nowrap">${C.dataBR(f.dataEmissao)}</td>
         <td class="nowrap">${f.periodoIni ? C.dataBRc(f.periodoIni) + " a " + C.dataBRc(f.periodoFim) : "—"}</td>
         <td class="nowrap">${C.dataBR(f.vencimento)}</td>
@@ -540,7 +573,7 @@
     const busca = C.semAcento(u.busca).toLowerCase().trim();
     const casa = (f) => {
       if (!busca) return true;
-      const t = C.semAcento([f.id, (f.tomador || {}).razaoSocial, (f.tomador || {}).fantasia, (f.tomador || {}).documento, localDaFatura(f), ...(f.itens || []).map((i) => i.equip + " " + i.descricao)].join(" ")).toLowerCase();
+      const t = C.semAcento([f.id, (f.tomador || {}).razaoSocial, (f.tomador || {}).fantasia, (f.tomador || {}).documento, localDaFatura(f), apelidoDe(f.registro), ...(f.itens || []).map((i) => i.equip + " " + i.descricao)].join(" ")).toLowerCase();
       return busca.split(/\s+/).every((p) => t.includes(p));
     };
     const filtraSit = (f) => u.sit === "todas" || C.situacao(f, d) === u.sit;
@@ -557,7 +590,7 @@
         <button class="btn" data-acao="exportar">${ic("excel")}Exportar Excel</button>
         <button class="btn primario" data-acao="nova">${ic("mais")}Nova fatura</button></div>
       <div class="filtros">
-        <input class="busca-local" type="search" placeholder="Filtrar por cliente, nº, equipamento…" value="${esc(u.busca)}" data-f="busca">
+        <input class="busca-local" type="search" placeholder="Filtrar por cliente, nome da locação, nº, equipamento…" value="${esc(u.busca)}" data-f="busca">
         <span class="chips">${chipsSit}</span>
         ${locaisConhecidos().length ? `<select data-f="local"><option value="">Todos os locais</option>${locaisConhecidos().map((x) => `<option ${x === u.local ? "selected" : ""}>${esc(x)}</option>`).join("")}</select>` : ""}
         ${u.modo === "locacao" ? `<select data-f="locStatus"><option value="ativa" ${u.locStatus === "ativa" ? "selected" : ""}>Locações ativas</option><option value="encerrada" ${u.locStatus === "encerrada" ? "selected" : ""}>Encerradas</option><option value="todas" ${u.locStatus === "todas" ? "selected" : ""}>Todas as locações</option></select>
@@ -581,7 +614,7 @@
         if (u.local && localNome(l) !== u.local) continue;
         const fats = (S.fatsDe.get(l.registro) || []);
         const vis = fats.filter((f) => casa(f) && filtraSit(f) && filtraData(f));
-        const nomeOk = !busca || C.semAcento(nomeCliente(l.clienteId) + " " + equipLoc(l) + " " + l.registro + " " + localNome(l)).toLowerCase().includes(busca);
+        const nomeOk = !busca || C.semAcento(nomeCliente(l.clienteId) + " " + apelidoLoc(l) + " " + equipLoc(l) + " " + l.registro + " " + localNome(l)).toLowerCase().includes(busca);
         if (!vis.length && !(nomeOk && u.sit === "todas" && !u.de && !u.ate && fats.length === 0)) continue;
         grupos.push({ l, fats, vis, ult: fats[fats.length - 1], pend: pend.get(l.registro) });
       }
@@ -593,13 +626,14 @@
     }
 
     main.addEventListener("click", (e) => {
-      const b = e.target.closest("[data-modo],[data-sit],[data-acao],[data-especial],[data-loc-abrir],[data-loc-menu],[data-renovar-loc],[data-encerrar-loc]");
+      const b = e.target.closest("[data-modo],[data-sit],[data-acao],[data-especial],[data-loc-abrir],[data-loc-menu],[data-loc-nome],[data-renovar-loc],[data-encerrar-loc]");
       if (!b) return;
       if (b.dataset.modo) { u.modo = b.dataset.modo; u.especial = ""; return render(); }
       if (b.dataset.sit) { u.sit = b.dataset.sit; return render(); }
       if (b.dataset.especial) { u.especial = u.especial ? "" : b.dataset.especial; if (u.especial) u.locStatus = "ativa"; return render(); }
       if (b.dataset.renovarLoc) { e.stopPropagation(); return ML.abrirEditor({ modo: "renovar", registro: +b.dataset.renovarLoc }); }
       if (b.dataset.encerrarLoc) { e.stopPropagation(); return ML.encerrarLocacao(S.loc.get(+b.dataset.encerrarLoc)); }
+      if (b.dataset.locNome) { e.stopPropagation(); return nomearLocacao(S.loc.get(+b.dataset.locNome)); }
       if (b.dataset.locMenu) { e.stopPropagation(); return editarLocacao(S.loc.get(+b.dataset.locMenu)); }
       if (b.dataset.locAbrir) {
         if (e.target.closest(".loc-corpo")) return;
@@ -641,9 +675,9 @@
     const dias = ult && ult.periodoFim ? C.difDias(d, ult.periodoFim) : null;
     return `<div class="loc ${l.status} ${aberto ? "aberto" : ""}">
       <div class="loc-cab" data-loc-abrir="${l.registro}">
-        <div class="loc-tit"><b>${cli.sigla ? `<span class="sigla">${esc(cli.sigla)}</span> ` : ""}${esc(nomeCliente(l.clienteId))}</b>
+        <div class="loc-tit ${apelidoLoc(l) ? "com-nome" : ""}">${apelidoLoc(l) ? chipNome(l) : ""}<b>${cli.sigla ? `<span class="sigla">${esc(cli.sigla)}</span> ` : ""}${esc(nomeCliente(l.clienteId))}</b>
           <small>Locação ${esc(C.padReg(l.registro, S.cfg.digitosRegistro))} · ${esc(equipLoc(l) || "sem equipamento")} · ${fats.length} fatura${fats.length === 1 ? "" : "s"}${l.status === "encerrada" ? " · encerrada" : ""}</small>
-          <div class="loc-chips">${chipLocal(l)}${ML.chipFrete ? ML.chipFrete(l) : ""}</div></div>
+          <div class="loc-chips">${apelidoLoc(l) ? "" : chipNome(l)}${chipLocal(l)}${ML.chipFrete ? ML.chipFrete(l) : ""}</div></div>
         <div class="loc-per">${ult ? `<span>Última: <b class="nfat">${esc(ult.id)}</b> ${sitBadge(C.situacao(ult, d))}</span>
           <span class="muted">${ult.periodoIni ? C.dataBRc(ult.periodoIni) + " a " + C.dataBRc(ult.periodoFim) : ""}
           ${l.status === "ativa" && dias != null ? ` · <span class="etq ${dias < 0 ? "verm" : pend ? "lar" : ""}">${textoDias(dias)}</span>` : ""}</span>` : `<span class="muted">sem faturas</span>`}
@@ -662,6 +696,7 @@
     if (!l) return;
     const corpo = el(`<div style="display:flex;flex-direction:column;gap:12px">
       <div class="aviso-linha">Locação <b>${esc(C.padReg(l.registro, S.cfg.digitosRegistro))}</b> · ${esc(nomeCliente(l.clienteId))}</div>
+      <label class="campo"><span>Nome da locação <small>(para reconhecer — não sai na fatura)</small></span><input name="apelido" maxlength="60" value="${esc(apelidoLoc(l))}" placeholder="ex.: Torre B – Santa Lúcia"></label>
       <label class="campo"><span>Serviço (texto usado na discriminação das novas faturas)</span><input name="servico" value="${esc(l.servico || "")}"></label>
       <div class="linha-campos c2">
         <label class="campo"><span>Data de implantação</span><input type="date" name="dataInicio" value="${esc(l.dataInicio || "")}"></label>
@@ -679,7 +714,9 @@
       const v = (n) => $(`[name=${n}]`, corpo).value;
       // endereço escolhido nas sugestões do Google: já vem com o ponto exato
       const esc0 = ML.coordsEscolhidas ? ML.coordsEscolhidas($("[name=enderecoObra]", corpo)) : null;
-      await rpc("fat_salvar_locacao", { p_registro: l.registro, p_dados: { servico: v("servico"), dataInicio: v("dataInicio"), status: v("status"), emissorId: v("emissorId"), obs: v("obs"),
+      const apelido = v("apelido").replace(/\s+/g, " ").trim();
+      validarApelido(apelido, l.registro);
+      await rpc("fat_salvar_locacao", { p_registro: l.registro, p_dados: { apelido, servico: v("servico"), dataInicio: v("dataInicio"), status: v("status"), emissorId: v("emissorId"), obs: v("obs"),
         local: Object.assign({}, l.local || {}, { nome: v("localNome").trim().toUpperCase(), endereco: v("enderecoObra").trim() }, esc0 ? ML.localDeSugestao(esc0) : {}) } });
       aviso("Locação salva.", "ok");
       const mudouEnd = !esc0 && v("enderecoObra").trim() !== ((l.local || {}).endereco || "");
@@ -712,7 +749,7 @@
       <div class="det-prev"><iframe title="Fatura"></iframe></div>
       <div class="det-lado">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span class="nfat" style="font-size:22px">${esc(f.id)}</span>${sitBadge(s)}</div>
-        <div><b>${esc((f.tomador || {}).razaoSocial)}</b><br><small class="muted">${esc((f.tomador || {}).documento || "")}</small></div>
+        <div>${apelidoLoc(l) ? `<span class="ap-mini grande">${ic("etiqueta")}${esc(apelidoLoc(l))}</span>` : ""}<b>${esc((f.tomador || {}).razaoSocial)}</b><br><small class="muted">${esc((f.tomador || {}).documento || "")} · locação ${esc(C.padReg(f.registro, S.cfg.digitosRegistro))}</small></div>
         ${vg(f.total, "medio")}
         <dl><dt>Emissão</dt><dd>${C.dataBR(f.dataEmissao)}</dd>
           <dt>Período</dt><dd>${f.periodoIni ? C.dataBR(f.periodoIni) + " a " + C.dataBR(f.periodoFim) : "—"}</dd>
@@ -847,7 +884,7 @@
     try {
       aviso("Gerando planilha…");
       await carregarScript("vendor/exceljs.min.js");
-      await window.MLRel.faturas(lista, { nomes: S.nomes, local: localDaFatura, titulo, sub: `Gerado em ${C.dataBR(hoje())} por ${S.op.nome || S.user.email} · ${lista.length} faturas`, hoje: hoje(), arquivo });
+      await window.MLRel.faturas(lista, { nomes: S.nomes, local: localDaFatura, apelido: (f) => apelidoDe(f.registro), titulo, sub: `Gerado em ${C.dataBR(hoje())} por ${S.op.nome || S.user.email} · ${lista.length} faturas`, hoje: hoje(), arquivo });
     } catch (e) { aviso(msgErro(e), "erro"); }
   }
 
@@ -896,6 +933,6 @@
   // expõe para os outros arquivos (editor.js, telas.js)
   window.ML = { sb, S, C, $, $$, esc, el, ic, vg, sitBadge, aviso, modal, confirmar, msgErro, rpc, carregar, recarregarERender, render, TELAS,
     hidratarIcones, salvarConfig, ultimaFatura, fatura, nomeCliente, equipLoc, abrirFatura, baixarPdf, exportarFaturas, carregarScript,
-    tabelaFaturas, ligarTabelas, renovacoes, localNome, locaisConhecidos, hoje, todos, situacaoEquip, NOME_SIT_EQ, carregarLeaflet, editarLocacao, textoDias, avisoDias, abrirEditor: null };
+    tabelaFaturas, ligarTabelas, renovacoes, localNome, locaisConhecidos, hoje, todos, situacaoEquip, NOME_SIT_EQ, carregarLeaflet, editarLocacao, textoDias, apelidoLoc, apelidoDe, validarApelido, nomearLocacao, chipNome, avisoDias, abrirEditor: null };
   document.addEventListener("DOMContentLoaded", () => setTimeout(iniciar, 0));
 })();

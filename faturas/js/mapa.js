@@ -139,6 +139,7 @@
   }
   function popupHtml(x) {
     return `<div class="pop"><b>${esc(x.cli.razaoSocial || "")}</b>
+      ${ML.apelidoLoc(x.l) ? `<div class="ap-mini">${ic("etiqueta")}${esc(ML.apelidoLoc(x.l))}</div>` : ""}
       <small>Locação ${esc(C.padReg(x.l.registro, S.cfg.digitosRegistro))}${x.u ? " · " + esc(x.u.id) : ""}</small>
       ${x.l.local && x.l.local.nome ? `<div class="pop-local">${ic("mapa")}<b>${esc(x.l.local.nome)}</b></div>` : ""}
       <div class="pop-eq">${x.equips.map((e) => `<span class="etq">${esc(e)}</span>`).join(" ") || '<span class="muted">sem equipamento</span>'}</div>
@@ -168,7 +169,7 @@
             .map(([k, t]) => `<button class="chip ${st.filtro === k ? "ativo" : ""}" data-filtro="${k}">${t}<span class="n">${cont[k]}</span></button>`).join("")}</div>
           <div class="mapa-lista">${vis.map((x) => `<div class="ml-item" data-reg="${x.l.registro}">
             <i class="pt-mapa pin-${x.estado}"></i>
-            <div class="ml-tx"><b>${x.cli.sigla ? `<span class="sigla">${esc(x.cli.sigla)}</span> ` : ""}${esc(x.cli.razaoSocial || "")}</b>
+            <div class="ml-tx">${ML.apelidoLoc(x.l) ? `<span class="ap-mini">${ic("etiqueta")}${esc(ML.apelidoLoc(x.l))}</span>` : ""}<b>${x.cli.sigla ? `<span class="sigla">${esc(x.cli.sigla)}</span> ` : ""}${esc(x.cli.razaoSocial || "")}</b>
               <small>${x.l.local && x.l.local.nome ? esc(x.l.local.nome) + " · " : ""}${esc(x.equips.join(" · ") || "sem equipamento")}</small>
               <small>${x.u && x.u.periodoFim ? "até " + C.dataBRc(x.u.periodoFim) + " · " + esc(ML.textoDias(x.dias)) : ""}</small></div>
             ${x.temPos ? `<button class="ic-btn peq" title="Ver no mapa" data-ir="${x.l.registro}">${ic("alvo")}</button>` : `<button class="btn peq" data-local="${x.l.registro}">${ic("mapa")}Definir local</button>`}
@@ -593,7 +594,7 @@
     const sugestao = loc.endereco || "";
     let pos = isFinite(+loc.lat) && loc.lat !== "" && loc.lat != null ? [+loc.lat, +loc.lng] : null;
     const corpo = el(`<div style="display:flex;flex-direction:column;gap:10px">
-      <div class="aviso-linha"><b>${esc(cli.razaoSocial || (temp ? "Nova locação" : ""))}</b>${l.registro ? ` · locação ${esc(C.padReg(l.registro, S.cfg.digitosRegistro))}` : temp && cli.razaoSocial ? " · nova locação" : ""}</div>
+      <div class="aviso-linha"><b>${esc(cli.razaoSocial || (temp ? "Nova locação" : ""))}</b>${l.registro ? ` · locação ${esc(C.padReg(l.registro, S.cfg.digitosRegistro))}${ML.apelidoLoc(l) ? " · " + esc(ML.apelidoLoc(l)) : ""}` : temp && cli.razaoSocial ? " · nova locação" : ""}</div>
       <div style="display:flex;gap:8px;align-items:flex-end">
         <label class="campo" style="flex:1"><span>Endereço da obra <small>— digite e escolha uma sugestão: o ponto é marcado no mapa sozinho</small></span><input data-end value="${esc(sugestao)}" placeholder="ex.: QNM 34 Conjunto A, Ceilândia  ·  SIA Trecho 3  ·  nome da empresa"></label>
         <button class="btn" data-buscar>${ic("busca")}Buscar</button></div>
