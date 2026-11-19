@@ -520,3 +520,5 @@ details.avancado summary { cursor: pointer; font-size: 13px; color: var(--suave)
 .ap-mini i[data-ic] { width: 12px; height: 12px; flex: none; }
 .ap-mini.grande { font-size: 15px; max-width: none; margin-bottom: 2px; }
 .ap-mini.grande i[data-ic] { width: 14px; height: 14px; }
+.cli-unidades { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.cli-unidades .btn { font-weight: 400; }

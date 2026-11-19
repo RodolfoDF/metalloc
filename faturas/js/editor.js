@@ -129,6 +129,21 @@
 
     // ----------------------------- cálculos
     const cliente = () => S.cli.get(E.clienteId);
+    // clientes com a mesma razão social (filiais, CNPJ muda só no fim): identifica pela unidade e pelo CNPJ
+    const normNome = (x) => C.semAcento(String(x || "")).toUpperCase().replace(/\s+/g, " ").trim();
+    const docDig = (x) => String(x || "").replace(/\D/g, "");
+    const qtdNome = new Map(); S.clientes.forEach((c) => qtdNome.set(normNome(c.razaoSocial), (qtdNome.get(normNome(c.razaoSocial)) || 0) + 1));
+    const rotuloCli = (c) => !c ? "" : (qtdNome.get(normNome(c.razaoSocial)) || 0) > 1
+      ? [c.razaoSocial, c.fantasia, c.documento].filter(Boolean).join(" — ") : c.razaoSocial;
+    function acharCliente(txt) {
+      const v = normNome(txt), dg = docDig(txt);
+      if (!v) return { c: null, varios: [] };
+      const exato = S.clientes.find((x) => normNome(rotuloCli(x)) === v);
+      if (exato) return { c: exato, varios: [] };
+      if (dg.length >= 8) { const pd = S.clientes.filter((x) => docDig(x.documento) === dg); if (pd.length === 1) return { c: pd[0], varios: [] }; }
+      const mesmos = S.clientes.filter((x) => normNome(x.razaoSocial) === v);
+      return mesmos.length === 1 ? { c: mesmos[0], varios: [] } : { c: null, varios: mesmos };
+    }
     const emissor = () => S.emissores.find((e) => e.id === E.emissorId);
     const registroPrev = () => modo === "nova" ? (E.regAuto ? proximoLivre() : (+E.regManual || 0)) : orig.registro;
     const seqPrev = () => modo === "nova" ? (+E.seqInicial || 0) : modo === "renovar" ? orig.seq + 1 : orig.seq;
@@ -187,7 +202,7 @@
         <div style="display:flex;gap:8px;align-items:flex-end">
           <label class="campo" style="flex:1"><span>Cliente</span><input data-k="clienteTxt" list="lista-clientes" placeholder="Digite o nome ou CNPJ" autocomplete="off"></label>
           <button class="btn" data-acao="novo-cliente" title="Cadastrar cliente">${ic("mais")}Novo</button></div>
-        <datalist id="lista-clientes">${S.clientes.map((c) => `<option value="${esc(c.razaoSocial)}">${esc((c.fantasia ? c.fantasia + " · " : "") + (c.documento || ""))}</option>`).join("")}</datalist>
+        <datalist id="lista-clientes">${S.clientes.map((c) => `<option value="${esc(rotuloCli(c))}">${esc((c.fantasia ? c.fantasia + " · " : "") + (c.documento || ""))}</option>`).join("")}</datalist>
         <div class="aviso-linha" data-cli-info hidden></div>
         <label class="campo"><span>Nome da locação <small>(opcional — para reconhecer nas listas; não sai na fatura)</small></span><input data-k="apelido" maxlength="60" placeholder="ex.: Torre B – Santa Lúcia, Galpão 3, Obra do viaduto" autocomplete="off"></label>
         <div class="linha-campos c3">
@@ -265,7 +280,7 @@
     }
     if (campo("regAuto")) campo("regAuto").value = E.regAuto ? "1" : "0";
     if (campo("numAuto")) campo("numAuto").value = E.numAuto === false ? "0" : "1";
-    if (campo("clienteTxt") && cliente()) campo("clienteTxt").value = cliente().razaoSocial;
+    if (campo("clienteTxt") && cliente()) campo("clienteTxt").value = rotuloCli(cliente());
 
     if (ML.autocompletarEndereco && campo("enderecoObra")) ML.autocompletarEndereco(campo("enderecoObra"));
     const compDonos = seletorDonos($("[data-comp-donos]", ed), comp, () => {});
@@ -289,9 +304,8 @@
       }
       if (!k) return;
       if (k === "clienteTxt") {
-        const v = t.value.trim().toLowerCase();
-        const c = S.clientes.find((x) => (x.razaoSocial || "").toLowerCase() === v) || S.clientes.find((x) => (x.documento || "") && x.documento === t.value.trim());
-        E.clienteId = c ? c.id : "";
+        const { c, varios } = acharCliente(t.value);
+        E.clienteId = c ? c.id : ""; E.cliVarios = varios;
         if (c) { E.sigla = c.sigla || C.sugerirSigla(c.razaoSocial); campo("sigla").value = E.sigla; }
       } else if (k === "atualizarCadastro") E.atualizarCadastro = t.checked;
       else if (k === "regAuto") E.regAuto = t.value === "1";
@@ -319,7 +333,7 @@
     }
 
     ed.addEventListener("click", async (e) => {
-      const b = e.target.closest("[data-acao],[data-per],[data-rem],[data-item-donos]");
+      const b = e.target.closest("[data-acao],[data-per],[data-rem],[data-item-donos],[data-escolher-cli]");
       if (!b) return;
       if (b.tagName === "A") e.preventDefault();
       if (b.dataset.per) {
@@ -337,9 +351,16 @@
       if (a === "inserir") return inserirItem();
       if (a === "novo-cliente") {
         const c = await ML.editarCliente(null);
-        if (c) { E.clienteId = c.id; campo("clienteTxt").value = c.razaoSocial; E.sigla = c.sigla || C.sugerirSigla(c.razaoSocial); campo("sigla").value = E.sigla;
-          $("#lista-clientes", ed).insertAdjacentHTML("beforeend", `<option value="${esc(c.razaoSocial)}">`); atualizar(); }
+        if (c) { qtdNome.set(normNome(c.razaoSocial), (qtdNome.get(normNome(c.razaoSocial)) || 0) + 1);
+          E.clienteId = c.id; E.cliVarios = []; campo("clienteTxt").value = rotuloCli(c); E.sigla = c.sigla || C.sugerirSigla(c.razaoSocial); campo("sigla").value = E.sigla;
+          $("#lista-clientes", ed).innerHTML = S.clientes.concat(S.clientes.some((x) => x.id === c.id) ? [] : [c]).map((x) => `<option value="${esc(rotuloCli(x))}">${esc((x.fantasia ? x.fantasia + " · " : "") + (x.documento || ""))}</option>`).join(""); atualizar(); }
         return;
+      }
+      if (b.dataset.escolherCli) {
+        const c = S.cli.get(b.dataset.escolherCli); if (!c) return;
+        E.clienteId = c.id; E.cliVarios = []; campo("clienteTxt").value = rotuloCli(c);
+        E.sigla = c.sigla || C.sugerirSigla(c.razaoSocial); campo("sigla").value = E.sigla; sujo = true;
+        return atualizar();
       }
       if (a === "salvar") return salvar(b);
     });
@@ -455,11 +476,17 @@
       const nm = $("[data-num-manual]", ed); if (nm) nm.hidden = E.numAuto;
       if (modo === "nova") {
         $("[data-reg-manual]", ed).hidden = E.regAuto;
-        const info = $("[data-cli-info]", ed), c = cliente();
-        info.hidden = !c;
+        const info = $("[data-cli-info]", ed), c = cliente(), varios = (!c && E.cliVarios) || [];
+        info.hidden = !c && !varios.length;
+        info.classList.toggle("lar", !c && varios.length > 0);
+        if (!c && varios.length) {
+          info.innerHTML = `<b>Há ${varios.length} cadastros com este nome (CNPJs diferentes).</b> Escolha a unidade:
+            <div class="cli-unidades">${varios.map((x) => { const n = S.locacoes.filter((l) => l.clienteId === x.id && l.status === "ativa").length;
+              return `<button type="button" class="btn peq" data-escolher-cli="${esc(x.id)}"><b>${esc(x.fantasia || x.razaoSocial)}</b> · ${esc(x.documento || "sem CNPJ")}${x.cidade ? " · " + esc(x.cidade) : ""}${n ? ` · ${n} ativa(s)` : ""}</button>`; }).join("")}</div>`;
+        }
         if (c) {
           const locs = S.locacoes.filter((l) => l.clienteId === c.id && l.status === "ativa");
-          info.innerHTML = `${esc(c.documento || "")}${c.cidade ? " · " + esc(c.cidade) + (c.uf ? "/" + esc(c.uf) : "") : ""}${locs.length ? ` · <b>${locs.length} locação(ões) ativa(s)</b> — para continuar uma delas use “Renovar”` : ""}`;
+          info.innerHTML = `${c.fantasia && (qtdNome.get(normNome(c.razaoSocial)) || 0) > 1 ? "<b>" + esc(c.fantasia) + "</b> · " : ""}${esc(c.documento || "")}${c.cidade ? " · " + esc(c.cidade) + (c.uf ? "/" + esc(c.uf) : "") : ""}${locs.length ? ` · <b>${locs.length} locação(ões) ativa(s)</b> — para continuar uma delas use “Renovar”` : ""}`;
         }
         const av = $("[data-reg-aviso]", ed), r = +E.regManual;
         if (!E.regAuto && r && S.loc.has(r)) { av.hidden = false; av.textContent = `O registro ${r} já é da locação de ${ML.nomeCliente(S.loc.get(r).clienteId)}. Use outro número ou “Renovar” nessa locação.`; }
@@ -512,7 +539,7 @@
       const f = montarFatura(), itens = f.itens;
       const erros = [];
       if (modo === "nova") {
-        if (!E.clienteId) erros.push("Selecione o cliente (escolha da lista ou cadastre em “Novo”).");
+        if (!E.clienteId) erros.push(E.cliVarios && E.cliVarios.length ? "Há mais de um cadastro com este nome: escolha a unidade (CNPJ) logo abaixo do campo Cliente." : "Selecione o cliente (escolha da lista ou cadastre em “Novo”).");
         if (!E.emissorId) erros.push("Selecione o prestador de serviços.");
         if (!E.regAuto && !(+E.regManual > 0)) erros.push("Informe o número do registro.");
         if (!E.regAuto && S.loc.has(+E.regManual)) erros.push("Esse registro já está em uso.");

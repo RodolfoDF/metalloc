@@ -43,6 +43,11 @@
         for (const k of ["razaoSocial", "fantasia", "tipoDoc", "documento", "ie", "endereco", "cidade", "uf", "cep", "email", "contato", "obs"]) dados[k] = String(f[k].value || "").trim();
         dados.razaoSocial = dados.razaoSocial.toUpperCase() === dados.razaoSocial ? dados.razaoSocial : dados.razaoSocial;
         if (!dados.razaoSocial) throw new Error("Informe a razão social.");
+        const dg = dados.documento.replace(/\D/g, "");
+        const mesmoDoc = dg && S.clientes.find((k) => (!c || k.id !== c.id) && String(k.documento || "").replace(/\D/g, "") === dg);
+        if (mesmoDoc) throw new Error(`O documento ${dados.documento} já está cadastrado (${mesmoDoc.razaoSocial}${mesmoDoc.fantasia ? " — " + mesmoDoc.fantasia : ""}).`);
+        const mesmoNome = S.clientes.some((k) => (!c || k.id !== c.id) && C.semAcento(k.razaoSocial || "").toUpperCase().trim() === C.semAcento(dados.razaoSocial).toUpperCase().trim());
+        if (mesmoNome && !dados.fantasia) throw new Error("Já existe cliente com esta razão social (outra unidade/CNPJ). Preencha o nome fantasia da unidade para diferenciar na hora de faturar.");
         const sigla = C.limparSigla(f.sigla.value) || C.sugerirSigla(dados.razaoSocial);
         const id = c ? c.id : "c" + Date.now() + Math.floor(Math.random() * 1000);
         const r = await ML.sb.from("fat_clientes").upsert({ id, sigla, dados, atualizado_em: new Date().toISOString() });
